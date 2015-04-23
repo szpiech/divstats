@@ -28,18 +28,21 @@ L_PATH = ../lib/osx
 #L_PATH = ../lib/win32
 
 #For static linking of norm program to gsl libs
-LINK_OPTS = $(L_PATH)/libgsl.a $(L_PATH)/libgslcblas.a
+#LINK_OPTS = $(L_PATH)/libgsl.a $(L_PATH)/libgslcblas.a
 
 all : divstats
 
-divstats : divstats-main.o divstats-data.o binom.o param_t.o gzstream.o hamming_t.o
-	$(CC) $(G++FLAG) -o divstats divstats-main.o divstats-data.o binom.o param_t.o gzstream.o hamming_t.o $(LINK_OPTS2)
+divstats : divstats-main.o divstats-data.o binom.o param_t.o gzstream.o hamming_t.o divstats-winstats.o
+	$(CC) $(G++FLAG) -o divstats divstats-main.o divstats-data.o binom.o param_t.o gzstream.o hamming_t.o divstats-winstats.o $(LINK_OPTS2)
 
 divstats-main.o : divstats-main.cpp
 	$(CC) $(G++FLAG) -c divstats-main.cpp $(I_PATH)
 
 divstats-data.o : divstats-data.cpp
 	$(CC) $(G++FLAG) -c divstats-data.cpp $(I_PATH)
+
+divstats-winstats.o : divstats-winstats.cpp
+	$(CC) $(G++FLAG) -c divstats-winstats.cpp $(I_PATH)
 
 binom.o : binom.cpp
 	$(CC) $(G++FLAG) -c binom.cpp
