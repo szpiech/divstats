@@ -3,7 +3,7 @@
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
-   the Free Software Foundation; either version 2 of the License, or
+   the Free Software Foundation; either version 3 of the License, or
    (at your option) any later version.
 
    This program is distributed in the hope that it will be useful,
@@ -19,7 +19,7 @@
 #include <fstream>
 #include <string>
 #include "param_t.h"
-#include "hamming_t.h"
+#include "divstats-winstats.h"
 #include "divstats-data.h"
 
 using namespace std;
@@ -91,9 +91,9 @@ const string ARG_FAY_WU_H = "--h";
 const bool DEFAULT_FAY_WU_H = false;
 const string HELP_FAY_WU_H = "Set this flag to calculate Fay and Wu's H.";
 
-pair_t* findInclusiveSNPIndicies(int startSnpIndex, int currWinStart, int WINSIZE, MapData* mapData);
-
-double pi_window(HaplotypeData *hapData, pair_t* snpIndex);
+const string ARG_2_SWEEPFINDER = "--sweepfinder";
+const bool DEFAULT_2_SWEEPFINDER = false;
+const string HELP_2_SWEEPFINDER = "Output in SweepFinder format.";
 
 int main(int argc, char *argv[])
 {
@@ -117,6 +117,7 @@ int main(int argc, char *argv[])
   params.addListFlag(ARG_EHHK, DEFAULT_EHHK, "", HELP_EHHK);
   params.addFlag(ARG_TAJ_D, DEFAULT_TAJ_D, "", HELP_TAJ_D);
   params.addFlag(ARG_FAY_WU_H, DEFAULT_FAY_WU_H, "", HELP_FAY_WU_H);
+  params.addFlag(ARG_2_SWEEPFINDER, DEFAULT_2_SWEEPFINDER, "", HELP_2_SWEEPFINDER);
 
   try {
     params.parseCommandLine(argc, argv);
@@ -146,6 +147,8 @@ int main(int argc, char *argv[])
   bool CALC_EHHK = false;
   bool CALC_TAJ_D = params.getBoolFlag(ARG_TAJ_D);
   bool CALC_FAY_WU_H = params.getBoolFlag(ARG_FAY_WU_H);
+
+  bool SWEEPFINDER = params.getBoolFlag(ARG_2_SWEEPFINDER);
 
   // Check for consistency errors within flags
   bool ERROR = false;
@@ -254,6 +257,14 @@ int main(int argc, char *argv[])
   freqData = initFreqData(hapData);
 
 
+  if(SWEEPFINDER){
+    cout << "position\tx\tn\n";
+    for(int i = 0; i < freqData->nloci; i++){
+      cout << mapData->physicalPos[i] << "\t" << freqData->count[i] << "\t" << freqData->nhaps << endl;
+    }
+    return 0;
+  }
+
 
   int currWinStart = 1;//mapData->physicalPos[0];
   int currWinEnd = currWinStart + WINSIZE - 1;
@@ -291,14 +302,45 @@ int main(int argc, char *argv[])
     }
 
     cout << currWinStart << " " << currWinEnd;
+    array_t *sfs;
+    HaplotypeFrequencySpectrum *hfs;
     //Cycle over all windows and partitions
     for (int i = 0; i < windows->size(); i++) {
       snps = windows->at(i);
+      sfs = sfs_window(freqData, snps);
 
-      cout << " " << snps->end - snps->start + 1 << " " << pi_window(hapData, snps);
+      double piHAM, piSFS;
+      //piHAM = pi_window(hapData, snps);
+      piSFS = pi_from_sfs(sfs);
+
+      hfs = hfs_window(hapData, snps);
+
+      //cout << "\n";
+
+      map<string, int>::iterator it;
+      for (it = hfs->hap2count.begin(); it != hfs->hap2count.end(); it++) {
+        //cout << "\t" << it->first << " " << it->second << endl;
+      }
+
+      //cout << "--\n";
+
+      for (int j = 0; j < hfs->size; j++) {
+        int key = hfs->sortedCount[j];
+        pair <multimap<int, string>::iterator, multimap<int, string>::iterator> ret;
+        ret = hfs->count2hap.equal_range(key);
+        multimap<int, string>::iterator it;
+        for (it = ret.first; it != ret.second; it++) {
+          //cout << "\t" << it->second << " " << it->first << endl;
+        }
+
+      }
+
+      cout << " " << piSFS << " " << pi_k2(hfs,2);
 
       snps = NULL;
       delete windows->at(i);
+      releaseArray(sfs);
+      releaseHaplotypeFrequencySpectrum(hfs);
     }
     cout << "\n";
     delete windows;
@@ -306,55 +348,5 @@ int main(int argc, char *argv[])
 
   delete snpIndex;
   return 0;
-}
-
-pair_t* findInclusiveSNPIndicies(int startSnpIndex, int currWinStart, int WINSIZE, MapData* mapData) {
-
-  int currWinEnd = currWinStart + WINSIZE - 1;
-  int endSnpIndex = startSnpIndex;
-  int numSnps = mapData->nloci;
-
-  pair_t* snps = new pair_t;
-
-  if (mapData->physicalPos[numSnps - 1] < currWinStart) {
-    snps->start = numSnps;
-    snps->end = numSnps - 1;
-    return snps;
-  }
-
-  while (mapData->physicalPos[startSnpIndex] < currWinStart) {
-    startSnpIndex++;
-  }
-  while (mapData->physicalPos[endSnpIndex] < currWinEnd) {
-    endSnpIndex++;
-  }
-  endSnpIndex--;
-  endSnpIndex = (endSnpIndex >= numSnps) ? numSnps - 1 : endSnpIndex;
-
-  snps->start = startSnpIndex;
-  snps->end = endSnpIndex;
-  return snps;
-}
-
-double pi_window(HaplotypeData *hapData, pair_t* snpIndex) {
-  //int startSnpIndex; int endSnpIndex;
-  double pi = 0;
-  double denominator = (hapData->nhaps) * (hapData->nhaps - 1) * 0.5;
-  int length = snpIndex->end - snpIndex->start + 1;
-  if (length == 0)
-  {
-    pi = 0;
-  }
-  else
-  {
-    for (int i = 0; i < hapData->nhaps; i++)
-    {
-      for (int j = i + 1; j < hapData->nhaps; j++)
-      {
-        pi += hamming_dist_ptr(hapData->data[i] + snpIndex->start, hapData->data[j] + snpIndex->start, length);
-      }
-    }
-  }
-  return (pi / denominator);
 }
 

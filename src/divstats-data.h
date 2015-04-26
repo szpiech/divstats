@@ -5,12 +5,12 @@
    it under the terms of the GNU General Public License as published by
    the Free Software Foundation; either version 3 of the License, or
    (at your option) any later version.
-   
+
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
    GNU General Public License for more details.
-   
+
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software Foundation,
    Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301  USA
@@ -22,6 +22,7 @@
 #include <iostream>
 #include <fstream>
 #include "gzstream.h"
+#include <map>
 
 using namespace std;
 
@@ -30,18 +31,18 @@ const char MISSING_CHAR = '9';
 
 struct HaplotypeData
 {
-    char **data;
-    int nhaps;
-    int nloci;
+  char **data;
+  int nhaps;
+  int nloci;
 };
 
 struct MapData
 {
-    int *physicalPos;
-    double *geneticPos;
-    string *locusName;
-    int nloci;
-    string chr;
+  int *physicalPos;
+  double *geneticPos;
+  string *locusName;
+  int nloci;
+  string chr;
 };
 
 struct FreqData
@@ -56,6 +57,26 @@ struct pair_t
   int start;
   int end;
 };
+
+struct array_t
+{
+  int *data;
+  int size;
+};
+
+struct HaplotypeFrequencySpectrum {
+  map<string,int> hap2count;
+  multimap<int,string> count2hap;
+  int *sortedCount;
+  int size;
+  int numUniq;
+};
+
+HaplotypeFrequencySpectrum *initHaplotypeFrequencySpectrum();
+void releaseHaplotypeFrequencySpectrum(HaplotypeFrequencySpectrum *data);
+
+array_t *initArray(int size, int fill = 0);
+void releaseArray(array_t* data);
 
 //allocates the arrays and populates them with -9 or "--" depending on type
 MapData *initMapData(int nloci);
@@ -86,5 +107,8 @@ HaplotypeData *readHaplotypeDataTPED(string filename);
 //where a field is defined as a contiguous set of non whitespace
 //characters and fields are delimited by whitespace
 int countFields(const string &str);
+
+pair_t* findInclusiveSNPIndicies(int startSnpIndex, int currWinStart, int WINSIZE, MapData* mapData);
+
 
 #endif

@@ -21,8 +21,25 @@
 
 #include "hamming_t.h"
 #include "divstats-data.h"
+#include <map>
+#include <cstdlib>
+#include "binom.h"
+#include <gsl/gsl_combination.h>
 
+int compare (const void *a, const void *b);
+int *uniqInt(int *array, int size, int &newSize);
+array_t *sfs_window(FreqData *freqData, pair_t* snpIndex);
+
+HaplotypeFrequencySpectrum *hfs_window(HaplotypeData *hapData, pair_t* snpIndex);
 
 double pi_window(HaplotypeData *hapData, pair_t* snpIndex);
+double pi_from_sfs(array_t *sfs);
+double pi_k(HaplotypeFrequencySpectrum *hfs, int k);
+double pi_k2(HaplotypeFrequencySpectrum *hfs, int k);
+double pi_numerator_btw_pools(string *haps1, int length1, string *haps2, int length2, map<string, int> &hap2count);
+double pi_numerator(string *haps, int length, map<string, int> &hap2count);
+
+double a1(int n);
+double a2(int n);
 
 #endif

@@ -17,6 +17,48 @@
 */
 #include "divstats-data.h"
 
+HaplotypeFrequencySpectrum *initHaplotypeFrequencySpectrum(){
+    HaplotypeFrequencySpectrum *hfs = new HaplotypeFrequencySpectrum;
+    hfs->sortedCount = NULL;
+    hfs->size = 0;
+    hfs->numUniq = 0;
+    return hfs;
+}
+
+void releaseHaplotypeFrequencySpectrum(HaplotypeFrequencySpectrum *hfs){
+    if(hfs == NULL){
+        return;
+    }
+
+    if(hfs->sortedCount != NULL){
+        delete [] hfs->sortedCount;
+    }
+
+    delete hfs;
+    return;
+}
+
+array_t *initArray(int size, int fill){
+    array_t *data = new array_t;
+    data->size = size;
+    data->data = new int[size];
+    for(int i = 0; i < size; i++){
+        data->data[i] = fill;
+    }
+    return data;
+}
+void releaseArray(array_t* data){
+    if(data == NULL){
+        return;
+    }
+
+    if(data->data != NULL){
+        delete [] data->data;
+    }
+    delete data;
+    return;
+}
+
 FreqData *initFreqData(int nhaps, int nloci) {
     FreqData *freqData = new FreqData;
     freqData->count = new int[nloci];
@@ -51,7 +93,17 @@ FreqData *initFreqData(HaplotypeData* data) {
 
     return freqData;
 }
-void releaseFreqData(FreqData *data);
+
+void releaseFreqData(FreqData *data){
+    if(data == NULL){
+        return;
+    }
+    if(data->count != NULL){
+        delete [] data->count;
+    }
+    delete data;
+    return;
+}
 
 
 //reads in map data and also does basic checks on integrity of format
@@ -441,5 +493,33 @@ int countFields(const string &str)
         }
     }
     return numFields;
+}
+
+pair_t* findInclusiveSNPIndicies(int startSnpIndex, int currWinStart, int WINSIZE, MapData* mapData) {
+
+  int currWinEnd = currWinStart + WINSIZE - 1;
+  int endSnpIndex = startSnpIndex;
+  int numSnps = mapData->nloci;
+
+  pair_t* snps = new pair_t;
+
+  if (mapData->physicalPos[numSnps - 1] < currWinStart) {
+    snps->start = numSnps;
+    snps->end = numSnps - 1;
+    return snps;
+  }
+
+  while (mapData->physicalPos[startSnpIndex] < currWinStart) {
+    startSnpIndex++;
+  }
+  while (mapData->physicalPos[endSnpIndex] < currWinEnd) {
+    endSnpIndex++;
+  }
+  endSnpIndex--;
+  endSnpIndex = (endSnpIndex >= numSnps) ? numSnps - 1 : endSnpIndex;
+
+  snps->start = startSnpIndex;
+  snps->end = endSnpIndex;
+  return snps;
 }
 
