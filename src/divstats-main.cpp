@@ -258,9 +258,9 @@ int main(int argc, char *argv[])
 
 
   if(SWEEPFINDER){
-    cout << "position\tx\tn\n";
+    cout << "position\tx\tn\tfolded\n";
     for(int i = 0; i < freqData->nloci; i++){
-      cout << mapData->physicalPos[i] << "\t" << freqData->count[i] << "\t" << freqData->nhaps << endl;
+      cout << mapData->physicalPos[i] << "\t" << freqData->count[i] << "\t" << freqData->nhaps << "\t0\n";
     }
     return 0;
   }
