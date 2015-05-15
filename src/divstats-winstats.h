@@ -39,6 +39,7 @@ double pi_k2(HaplotypeFrequencySpectrum *hfs, int k);
 double pi_numerator_btw_pools(string *haps1, int length1, string *haps2, int length2, map<string, int> &hap2count);
 double pi_numerator(string *haps, int length, map<string, int> &hap2count);
 
+int segsites(array_t *sfs);
 double a1(int n);
 double a2(int n);
 

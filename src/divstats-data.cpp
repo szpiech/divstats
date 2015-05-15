@@ -495,31 +495,5 @@ int countFields(const string &str)
     return numFields;
 }
 
-pair_t* findInclusiveSNPIndicies(int startSnpIndex, int currWinStart, int WINSIZE, MapData* mapData) {
 
-  int currWinEnd = currWinStart + WINSIZE - 1;
-  int endSnpIndex = startSnpIndex;
-  int numSnps = mapData->nloci;
-
-  pair_t* snps = new pair_t;
-
-  if (mapData->physicalPos[numSnps - 1] < currWinStart) {
-    snps->start = numSnps;
-    snps->end = numSnps - 1;
-    return snps;
-  }
-
-  while (mapData->physicalPos[startSnpIndex] < currWinStart) {
-    startSnpIndex++;
-  }
-  while (mapData->physicalPos[endSnpIndex] < currWinEnd) {
-    endSnpIndex++;
-  }
-  endSnpIndex--;
-  endSnpIndex = (endSnpIndex >= numSnps) ? numSnps - 1 : endSnpIndex;
-
-  snps->start = startSnpIndex;
-  snps->end = endSnpIndex;
-  return snps;
-}
 

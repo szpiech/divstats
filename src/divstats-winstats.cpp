@@ -339,6 +339,15 @@ double pi_from_sfs(array_t *sfs) {
    return pi / denominator;
 }
 
+int segsites(array_t *sfs){
+   double s = 0;
+   int n = sfs->size - 1;
+   for (int i = 1; i < n; i++) {
+      s += sfs->data[i];
+   }
+   return s;
+}
+
 double s_from_sfs(array_t *sfs) {
    double s = 0;
    int n = sfs->size - 1;

@@ -52,12 +52,6 @@ struct FreqData
   int nhaps;
 };
 
-struct pair_t
-{
-  int start;
-  int end;
-};
-
 struct array_t
 {
   int *data;
@@ -70,6 +64,13 @@ struct HaplotypeFrequencySpectrum {
   int *sortedCount;
   int size;
   int numUniq;
+};
+
+struct pair_t //guess it's a triplet...
+{
+  int start;
+  int end;
+  int winStart;
 };
 
 HaplotypeFrequencySpectrum *initHaplotypeFrequencySpectrum();
@@ -107,8 +108,5 @@ HaplotypeData *readHaplotypeDataTPED(string filename);
 //where a field is defined as a contiguous set of non whitespace
 //characters and fields are delimited by whitespace
 int countFields(const string &str);
-
-pair_t* findInclusiveSNPIndicies(int startSnpIndex, int currWinStart, int WINSIZE, MapData* mapData);
-
 
 #endif
