@@ -79,6 +79,6 @@ const string HELP_FAY_WU_H = "Set this flag to calculate Fay and Wu's H.";
 
 #define NOPTS 7
 
-const string STATS[NOPTS] = (ARG_PI, ARG_PIK, ARG_SEGSITES, ARG_EHH, ARG_EHHK, ARG_TAJ_D, ARG_FAY_WU_H);
+const string STATS[NOPTS] = {ARG_PI, ARG_PIK, ARG_SEGSITES, ARG_EHH, ARG_EHHK, ARG_TAJ_D, ARG_FAY_WU_H};
 
 #endif

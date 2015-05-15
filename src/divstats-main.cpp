@@ -218,6 +218,8 @@ int main(int argc, char *argv[])
                   CALC_FAY_WU_H) *
                  (DO_PARTITION * PARTITIONS.size() + 1);
 
+  cerr << "Calculating " << numStats << " statistics in " << windows->size() << " windows.\n";
+
   double **results = new double*[windows->size()];
   for (int i = 0; i < windows->size(); i++) results[i] = new double[numStats];
 
