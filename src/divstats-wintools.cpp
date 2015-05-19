@@ -37,8 +37,11 @@ void calc_stats(void *order) {
 	FreqData *freqData = p->freqData;
 	param_t *params = p->params;
 	vector< pair_t* > *windows = p->windows;
+	int WINSIZE = params->getIntFlag(ARG_WINSIZE);
 	double **results = p->results;
 	int id = p->id;
+	int numStats = p->numStats;
+	string *names = p->names;
 	vector<int> PIK_CHOICE = params->getIntListFlag(ARG_PIK);
 	vector<int> EHH_WINS = params->getIntListFlag(ARG_EHH);
 	vector<int> EHHK_CHOICES = params->getIntListFlag(ARG_EHHK);
@@ -50,101 +53,153 @@ void calc_stats(void *order) {
 	HaplotypeFrequencySpectrum *hfs, *partition_hfs;
 	pair_t *snps, *partition_snps;
 
-
 	//Cycle over all windows and calculate stats
 	for (int i = id; i < windows->size(); i += numThreads) {
 		snps = windows->at(i);
+		/*
+		if (numSitesInDataWin(snps) <= 0) {
+			for (int s = 0; s < numStats; s++) {
+				results[i][s] = -9;
+			}
+			continue;
+		}
+		*/
 		sfs = sfs_window(freqData, snps);
 
 		int s = 0;
+		int s_pi = -9; //note storage location of pi if it exists
+		//useful for calculating Taj's D or F&W's H
+		int s_S = -9;
 		for (int j = 0; j < NOPTS; j++) {
 			if (STATS[j].compare(ARG_PI) == 0 && params->getBoolFlag(ARG_PI)) {
+				if (i == 0) (*names) += "pi ";
 				results[i][s] = pi_from_sfs(sfs);
+				s_pi = s;
 				s++;
 			}
 			else if (STATS[j].compare(ARG_PIK) == 0 && PIK_CHOICE[0] != 0) {
 				hfs = hfs_window(hapData, snps);
 				for (int k = 0; k < PIK_CHOICE.size(); k++) {
+					if (i == 0) (*names) += "pi_" + int2str(PIK_CHOICE[k]) + " ";
 					results[i][s] = pi_k2(hfs, PIK_CHOICE[k]);
 					s++;
 				}
 				releaseHaplotypeFrequencySpectrum(hfs);
 			}
 			else if (STATS[j].compare(ARG_SEGSITES) == 0 && params->getBoolFlag(ARG_SEGSITES)) {
+				if (i == 0) (*names) += "S ";
 				results[i][s] = segsites(sfs);
+				s_S = s;
 				s++;
 			}
 			else if (STATS[j].compare(ARG_EHH) == 0 && EHH_WINS[0] != 0) {
-				for (int k = 0; k < EHH_WINS.size(); k++) {
-					results[i][s] = -9;//ehh();
+				vector< pair_t* > *ehh_windows = getEHHWindows(snps->start, snps->winStart, WINSIZE, EHH_WINS, mapData);
+				for (int w = 0; w < ehh_windows->size(); w++) {
+					if (i == 0) (*names) += "ehh_" + int2str(EHH_WINS[w]) + " ";
+					hfs = hfs_window(hapData, ehh_windows->at(w));
+					results[i][s] = ehh_from_hfs(hfs);
 					s++;
+					releaseHaplotypeFrequencySpectrum(hfs);
 				}
+				releaseAllWindows(ehh_windows);
 			}
 			else if (STATS[j].compare(ARG_EHHK) == 0 && EHHK_CHOICES[0] != 0) {
-				for (int k = 0; k < EHHK_CHOICES.size(); k++) {
-					results[i][s] = -9;//ehhk();
-					s++;
+				vector< pair_t* > *ehh_windows = getEHHWindows(snps->start, snps->winStart, WINSIZE, EHH_WINS, mapData);
+				for (int w = 0; w < ehh_windows->size(); w++) {
+					hfs = hfs_window(hapData, ehh_windows->at(w));
+					for (int k = 0; k < EHHK_CHOICES.size(); k++) {
+						if (i == 0) (*names) += "ehh" + int2str(EHHK_CHOICES[k]) + "_" + int2str(EHH_WINS[w]) + " ";
+						results[i][s] = -9;// ehhk_from_hfs(hfs,EHHK_CHOICES[k]);
+						s++;
+					}
+					releaseHaplotypeFrequencySpectrum(hfs);
 				}
+				releaseAllWindows(ehh_windows);
 			}
 			else if (STATS[j].compare(ARG_TAJ_D) == 0 && params->getBoolFlag(ARG_TAJ_D)) {
-				results[i][s] = -9;
+				if (i == 0) (*names) += "D ";
+				if (s_pi >= 0 && s_S >= 0) results[i][s] = tajimaD_from_sfs(sfs, results[i][s_pi], results[i][s_S]);
+				else if (s_pi < 0 && s_S >= 0) results[i][s] = tajimaD_from_sfs(sfs, s_pi, results[i][s_S]);
+				else if (s_pi >= 0 && s_S < 0) results[i][s] = tajimaD_from_sfs(sfs, results[i][s_pi], s_S);
+				else results[i][s] = tajimaD_from_sfs(sfs);
 				s++;
 			}
 			else if (STATS[j].compare(ARG_FAY_WU_H) == 0 && params->getBoolFlag(ARG_FAY_WU_H)) {
+				if (i == 0) (*names) += "H ";
 				results[i][s] = -9;
 				s++;
 			}
+		}
+		if (DO_PARTITION) {
+			char part[2];
+			part[0] = 'A';
+			part[1] = '\0';
+			vector< pair_t* > *partition_windows = getPartitionWindows(snps->start, snps->winStart, PARTITIONS, mapData);
+			for (int p = 0; p < partition_windows->size(); p++) {
+				int s_pi0 = -9;
+				int s_S0 = -9;
 
-			if (DO_PARTITION) {
-				vector< pair_t* > *partition_windows = getPartitionWindows(snps->start, snps->winStart, PARTITIONS, mapData);
-				for (int p = 0; p < partition_windows->size(); p++) {
-					partition_snps = partition_windows->at(p);
-					partition_sfs = sfs_window(freqData, partition_snps);
+				string partStr(part);
+				partition_snps = partition_windows->at(p);
+				/*
+				if (numSitesInDataWin(partition_snps) <= 0) {
+					for (int s = 0; s < numStats; s++) {
+						results[i][s] = -9;
+					}
+					continue;
+				}
+				*/
+				partition_sfs = sfs_window(freqData, partition_snps);
 
+				for (int j = 0; j < NOPTS; j++) {
 					if (STATS[j].compare(ARG_PI) == 0 && params->getBoolFlag(ARG_PI)) {
+						if (i == 0) (*names) += "pi_" + partStr + " ";
 						results[i][s] = pi_from_sfs(partition_sfs);
+						s_pi0 = s;
 						s++;
 					}
 					else if (STATS[j].compare(ARG_PIK) == 0 && PIK_CHOICE[0] != 0) {
 						partition_hfs = hfs_window(hapData, partition_snps);
 						for (int k = 0; k < PIK_CHOICE.size(); k++) {
+							if (i == 0) (*names) += "pi_" +  int2str(PIK_CHOICE[k]) + "_" + partStr + " ";
 							results[i][s] = pi_k2(partition_hfs, PIK_CHOICE[k]);
 							s++;
 						}
 						releaseHaplotypeFrequencySpectrum(partition_hfs);
 					}
 					else if (STATS[j].compare(ARG_SEGSITES) == 0 && params->getBoolFlag(ARG_SEGSITES)) {
+						if (i == 0) (*names) += "S_" + partStr + " ";
 						results[i][s] = segsites(partition_sfs);
+						s_S0 = s;
 						s++;
 					}
-					else if (STATS[j].compare(ARG_EHH) == 0 && EHH_WINS[0] != 0) {
-						for (int k = 0; k < EHH_WINS.size(); k++) {
-							results[i][s] = -9;//ehh();
-							s++;
-						}
-					}
-					else if (STATS[j].compare(ARG_EHHK) == 0 && EHHK_CHOICES[0] != 0) {
-						for (int k = 0; k < EHHK_CHOICES.size(); k++) {
-							results[i][s] = -9;//ehhk();
-							s++;
-						}
-					}
 					else if (STATS[j].compare(ARG_TAJ_D) == 0 && params->getBoolFlag(ARG_TAJ_D)) {
-						results[i][s] = -9;
+						if (i == 0) (*names) += "D_" + partStr + " ";
+						if (s_pi0 >= 0 && s_S0 >= 0) results[i][s] = tajimaD_from_sfs(partition_sfs, results[i][s_pi0], results[i][s_S0]);
+						else if (s_pi0 < 0 && s_S0 >= 0) results[i][s] = tajimaD_from_sfs(partition_sfs, s_pi0, results[i][s_S0]);
+						else if (s_pi0 >= 0 && s_S0 < 0) results[i][s] = tajimaD_from_sfs(partition_sfs, results[i][s_pi0], s_S0);
+						else results[i][s] = tajimaD_from_sfs(partition_sfs);
 						s++;
 					}
 					else if (STATS[j].compare(ARG_FAY_WU_H) == 0 && params->getBoolFlag(ARG_FAY_WU_H)) {
+						if (i == 0) (*names) += "H_" + partStr + " ";
 						results[i][s] = -9;
 						s++;
 					}
-
-					releaseArray(partition_sfs);
 				}
+				part[0]++;
+				releaseArray(partition_sfs);
 			}
 		}
 		releaseArray(sfs);
 	}
 	return;
+}
+
+string int2str(int i) {
+	char buffer[10];
+	sprintf(buffer, "%d", i);
+	return string(buffer);
 }
 
 vector< pair_t* > *getPartitionWindows(int snpStart, int winStart, vector<int> &PARTITIONS, MapData *mapData) {
@@ -163,6 +218,17 @@ vector< pair_t* > *getPartitionWindows(int snpStart, int winStart, vector<int> &
 	delete partitionSnpIndex;
 	return partition_windows;
 }
+
+vector< pair_t* > *getEHHWindows(int snpStart, int winStart, int WINSIZE, vector<int> &EHH_WINS, MapData *mapData) {
+	vector< pair_t* > *ehh_windows = new vector< pair_t* >;
+	int currWinStart = winStart;
+	for (int i = 0; i < EHH_WINS.size(); i++) {
+		pair_t *snps = findInclusiveSNPIndicies(snpStart, ( winStart + (WINSIZE * 0.5) - (EHH_WINS[i] * 0.5) ) , EHH_WINS[i], mapData);
+		ehh_windows->push_back(snps);
+	}
+	return ehh_windows;
+}
+
 
 pair_t* findInclusiveSNPIndicies(int startSnpIndex, int currWinStart, int WINSIZE, MapData* mapData) {
 

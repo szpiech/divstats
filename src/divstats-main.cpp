@@ -28,6 +28,7 @@ using namespace std;
 
 int main(int argc, char *argv[])
 {
+  cerr << "divstats v" + VERSION + "\n";
   param_t params;
   params.setPreamble(PREAMBLE);
 
@@ -191,6 +192,15 @@ int main(int argc, char *argv[])
     return 1;
   }
 
+  string outfile = outfileBase + ".divstats.out";
+  ofstream fout;
+  fout.open(outfile.c_str());
+  if (fout.fail()) {
+    cerr << "ERROR: Failed to open " << outfile << " for writing.\n";
+    return 1;
+  }
+
+
   HaplotypeData *hapData;
   MapData *mapData;
   FreqData *freqData;
@@ -212,14 +222,15 @@ int main(int argc, char *argv[])
   int numStats = (CALC_PI +
                   CALC_PIK * PIK_CHOICE.size() +
                   CALC_S +
-                  CALC_EHH * EHH_WINS.size() +
-                  CALC_EHHK * EHHK_CHOICES.size() +
                   CALC_TAJ_D +
                   CALC_FAY_WU_H) *
-                 (DO_PARTITION * PARTITIONS.size() + 1);
+                 (DO_PARTITION * PARTITIONS.size() + 1) +
+                 (CALC_EHH * EHH_WINS.size() +
+                  CALC_EHHK * EHHK_CHOICES.size() * EHH_WINS.size());
 
   cerr << "Calculating " << numStats << " statistics in " << windows->size() << " windows.\n";
 
+  string names = "";
   double **results = new double*[windows->size()];
   for (int i = 0; i < windows->size(); i++) results[i] = new double[numStats];
 
@@ -230,6 +241,7 @@ int main(int argc, char *argv[])
   {
     order = new work_order_t;
     order->id = i;
+    order->numStats = numStats;
     order->hapData = hapData;
     order->mapData = mapData;
     order->freqData = freqData;
@@ -238,6 +250,7 @@ int main(int argc, char *argv[])
     order->params = &params;
     order->results = results;
     order->windows = windows;
+    order->names = &names;
     order->DO_PARTITION = DO_PARTITION;
     pthread_create(&(peer[i]),
                    NULL,
@@ -250,99 +263,24 @@ int main(int argc, char *argv[])
     pthread_join(peer[i], NULL);
   }
 
-  for (int w = 0; w < windows->size(); w++) {
-    cout << windows->at(w)->winStart << " " << windows->at(w)->winStart + WINSTEP;
-    for (int s = 0; s < numStats; s++) {
-      cout << " " << results[w][s];
-    }
-    cout << endl;
-  }
-
   delete [] peer;
 
-  /*
-    int currWinStart = 1;//mapData->physicalPos[0];
-    int currWinEnd = currWinStart + WINSIZE - 1;
-    int numSnps = mapData->nloci;
-    int endOfData = mapData->physicalPos[numSnps - 1];
-    pair_t *snpIndex = new pair_t;
-    snpIndex->start = 0;
-    snpIndex->end = -1;
-    int numInWindow;
 
-    for (currWinStart; currWinStart < endOfData; currWinStart += WINSTEP, currWinEnd += WINSTEP) {
-      vector< pair_t* > *windows = new vector< pair_t* >;
-
-      //Find SNP index boundaries for the whole window
-      pair_t *snps = findInclusiveSNPIndicies(snpIndex->start, currWinStart, WINSIZE, mapData);
-      windows->push_back(snps);
-
-      snpIndex->start = snps->start;
-      snpIndex->end = snps->end;
-
-      //Find SNP index boundaries for partitions
-      if (DO_PARTITION) {
-        pair_t *partitionSnpIndex = new pair_t;
-        partitionSnpIndex->start = snpIndex->start;
-        partitionSnpIndex->end = snpIndex->start - 1;
-        int partitionCurrWinStart = currWinStart;
-        for (int i = 0; i < PARTITIONS.size(); i++) {
-          pair_t *partition_snps = findInclusiveSNPIndicies(partitionSnpIndex->start, partitionCurrWinStart, PARTITIONS[i], mapData);
-          windows->push_back(partition_snps);
-          partitionSnpIndex->start = partition_snps->start;
-          partitionSnpIndex->end = partition_snps->end;
-          partitionCurrWinStart += PARTITIONS[i];
-        }
-        delete partitionSnpIndex;
-      }
-
-      cout << currWinStart << " " << currWinEnd;
-      array_t *sfs;
-      HaplotypeFrequencySpectrum *hfs;
-      //Cycle over all windows and partitions
-      for (int i = 0; i < windows->size(); i++) {
-        snps = windows->at(i);
-        sfs = sfs_window(freqData, snps);
-
-        double piHAM, piSFS;
-        //piHAM = pi_window(hapData, snps);
-        piSFS = pi_from_sfs(sfs);
-
-        hfs = hfs_window(hapData, snps);
-
-        //cout << "\n";
-
-        map<string, int>::iterator it;
-        for (it = hfs->hap2count.begin(); it != hfs->hap2count.end(); it++) {
-          //cout << "\t" << it->first << " " << it->second << endl;
-        }
-
-        //cout << "--\n";
-
-        for (int j = 0; j < hfs->size; j++) {
-          int key = hfs->sortedCount[j];
-          pair <multimap<int, string>::iterator, multimap<int, string>::iterator> ret;
-          ret = hfs->count2hap.equal_range(key);
-          multimap<int, string>::iterator it;
-          for (it = ret.first; it != ret.second; it++) {
-            //cout << "\t" << it->second << " " << it->first << endl;
-          }
-
-        }
-
-        cout << " " << piSFS << " " << pi_k2(hfs,2);
-
-        snps = NULL;
-        delete windows->at(i);
-        releaseArray(sfs);
-        releaseHaplotypeFrequencySpectrum(hfs);
-      }
-      cout << "\n";
-      delete windows;
+  fout << "chr start end " << names << endl;
+  for (int w = 0; w < windows->size(); w++) {
+    fout << mapData->chr << " " << windows->at(w)->winStart << " " << windows->at(w)->winStart + WINSTEP;
+    for (int s = 0; s < numStats; s++) {
+      fout << " " << results[w][s];
     }
+    fout << endl;
+  }
 
-  delete snpIndex;
-  */
+  fout.close();
+
+  releaseHapData(hapData);
+  releaseMapData(mapData);
+  releaseFreqData(freqData);
+
   return 0;
 }
 

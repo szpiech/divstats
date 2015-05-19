@@ -17,6 +17,18 @@
 */
 #include "divstats-winstats.h"
 
+double ehh_from_hfs(HaplotypeFrequencySpectrum *hfs) {
+   if(hfs == NULL) return -9;
+   map<string, int>::iterator it;
+   double tot = 0;
+   double homozygosity = 0;
+   for (it = hfs->hap2count.begin(); it != hfs->hap2count.end(); it++) {
+      tot += it->second;
+      homozygosity += nCk(it->second, 2);
+   }
+   homozygosity /= nCk(tot, 2);
+   return homozygosity;
+}
 
 double pi_numerator_btw_pools(string *haps1, int length1, string *haps2, int length2, map<string, int> &hap2count) {
    double num = 0;
@@ -43,7 +55,7 @@ double pi_numerator(string *haps, int length, map<string, int> &hap2count) {
 }
 
 double pi_k2(HaplotypeFrequencySpectrum *hfs, int k) {
-
+   if (hfs == NULL) return -9;
    pair <multimap<int, string>::iterator, multimap<int, string>::iterator> ret;
    multimap<int, string>::iterator it;
 
@@ -105,8 +117,8 @@ double pi_k2(HaplotypeFrequencySpectrum *hfs, int k) {
          if (i < howmanyUniqHaps) {
             nhaps += hfs->hap2count[haps[i]];
          }
-         else{
-            nhaps += hfs->hap2count[equalFreqHaps[i-howmanyUniqHaps]];
+         else {
+            nhaps += hfs->hap2count[equalFreqHaps[i - howmanyUniqHaps]];
          }
       }
       denominator = (nhaps) * (nhaps - 1) * 0.5;
@@ -192,6 +204,7 @@ double pi_k2(HaplotypeFrequencySpectrum *hfs, int k) {
 }
 
 double pi_k(HaplotypeFrequencySpectrum *hfs, int k) {
+   if (hfs == NULL) return -9;
    k = (hfs->numUniq < k) ? hfs->numUniq : k;
    string *haps = new string[k];
 
@@ -231,6 +244,8 @@ double pi_k(HaplotypeFrequencySpectrum *hfs, int k) {
 }
 
 HaplotypeFrequencySpectrum *hfs_window(HaplotypeData *hapData, pair_t* snpIndex) {
+   if (numSitesInDataWin(snpIndex) <= 0) return NULL;
+
    HaplotypeFrequencySpectrum *hfs = initHaplotypeFrequencySpectrum();
 
    //Generate haplotypes and populate hap2count
@@ -300,6 +315,7 @@ int compare (const void *a, const void *b)
 }
 
 double pi_window(HaplotypeData *hapData, pair_t* snpIndex) {
+   if (numSitesInDataWin(snpIndex) <= 0) return -9;
    //int startSnpIndex; int endSnpIndex;
    double pi = 0;
    double denominator = (hapData->nhaps) * (hapData->nhaps - 1) * 0.5;
@@ -318,7 +334,7 @@ double pi_window(HaplotypeData *hapData, pair_t* snpIndex) {
 }
 
 array_t *sfs_window(FreqData *freqData, pair_t* snpIndex) {
-
+   if (numSitesInDataWin(snpIndex) <= 0) return NULL;
    array_t *sfs = initArray(freqData->nhaps + 1);
 
    for (int i = snpIndex->start; i <= snpIndex->end; i++) {
@@ -329,6 +345,7 @@ array_t *sfs_window(FreqData *freqData, pair_t* snpIndex) {
 }
 
 double pi_from_sfs(array_t *sfs) {
+   if (sfs == NULL) return -9;
    double pi = 0;
    int n = sfs->size - 1;
    double denominator = n * (n - 1) * 0.5;
@@ -339,7 +356,30 @@ double pi_from_sfs(array_t *sfs) {
    return pi / denominator;
 }
 
-int segsites(array_t *sfs){
+double tajimaD_from_sfs(array_t *sfs, double pi, double S) {
+   if (sfs == NULL) return -9;
+   if (pi < 0) {
+      pi = pi_from_sfs(sfs);
+   }
+
+   if (S < 0) {
+      S = segsites(sfs);
+   }
+   int n = sfs->size - 1;
+   double e1, e2, a1, a2, denominator;
+
+   a1 = calc_a1(n);
+   a2 = calc_a2(n);
+   e1 = calc_e1(n, a1);
+   e2 = calc_e2(n, a1, a2);
+
+   denominator = e1 * S + e2 * S * (S - 1);
+
+   return (pi - S / a1) / denominator;
+}
+
+int segsites(array_t *sfs) {
+   if (sfs == NULL) return -9;
    double s = 0;
    int n = sfs->size - 1;
    for (int i = 1; i < n; i++) {
@@ -349,6 +389,7 @@ int segsites(array_t *sfs){
 }
 
 double s_from_sfs(array_t *sfs) {
+   if (sfs == NULL) return -9;
    double s = 0;
    int n = sfs->size - 1;
 
@@ -358,16 +399,28 @@ double s_from_sfs(array_t *sfs) {
    return s;
 }
 
-double a1(int n) {
+double calc_a1(int n) {
    double a = 0;
    for (double i = 1; i < n; i++)
-      a += 1 / i;
+      a += 1.0 / i;
    return a;
 }
 
-double a2(int n) {
+double calc_a2(int n) {
    double a = 0;
    for (double i = 1; i < n; i++)
-      a += 1 / (i * i);
+      a += 1.0 / (i * i);
    return a;
+}
+
+double calc_e1(int n, double a1) {
+   return ( (n + 1.0) / (3.0 * n - 3.0) - (1.0 / a1) ) / a1;
+}
+
+double calc_e2(int n, double a1, double a2) {
+   return ( (2.0 * n * n + 2.0 * n + 6.0) / (9.0 * n * (n - 1)) - (n + 2) / (n * a1) + a2 / (a1 * a1)) / (a1 * a1 + a2);
+}
+
+int numSitesInDataWin(pair_t* win) {
+   return (win->end - win->start + 1);
 }

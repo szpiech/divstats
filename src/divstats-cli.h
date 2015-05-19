@@ -1,6 +1,8 @@
 #ifndef __DIVSTATS_CLI_H__
 #define __DIVSTATS_CLI_H__
 
+const string VERSION = "1.0.0";
+
 const string PREAMBLE = "";
 
 const string ARG_THREADS = "--threads";

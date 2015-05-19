@@ -11,7 +11,7 @@
 struct work_order_t
 {
     int id;
-
+    int numStats;
     HaplotypeData *hapData;
     MapData *mapData;
     FreqData *freqData;
@@ -19,7 +19,7 @@ struct work_order_t
 	vector< pair_t* > *windows;
 
     double **results;
-
+    string *names;
     //ofstream *flog;
     //Bar *bar;
 
@@ -35,6 +35,10 @@ void releaseAllWindows(vector< pair_t* > *windows);
 
 vector< pair_t* > *getPartitionWindows(int snpStart, int winStart, vector<int> &PARTITIONS, MapData *mapData);
 
+vector< pair_t* > *getEHHWindows(int snpStart, int winStart, int WINSIZE, vector<int> &EHH_WINS, MapData *mapData);
+
 void calc_stats(void *work_order);
+
+string int2str(int i);
 
 #endif

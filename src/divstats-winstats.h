@@ -28,8 +28,8 @@
 
 int compare (const void *a, const void *b);
 int *uniqInt(int *array, int size, int &newSize);
-array_t *sfs_window(FreqData *freqData, pair_t* snpIndex);
 
+array_t *sfs_window(FreqData *freqData, pair_t* snpIndex);
 HaplotypeFrequencySpectrum *hfs_window(HaplotypeData *hapData, pair_t* snpIndex);
 
 double pi_window(HaplotypeData *hapData, pair_t* snpIndex);
@@ -39,8 +39,16 @@ double pi_k2(HaplotypeFrequencySpectrum *hfs, int k);
 double pi_numerator_btw_pools(string *haps1, int length1, string *haps2, int length2, map<string, int> &hap2count);
 double pi_numerator(string *haps, int length, map<string, int> &hap2count);
 
+double tajimaD_from_sfs(array_t *sfs, double pi = -9, double S = -9);
+
+double ehh_from_hfs(HaplotypeFrequencySpectrum *hfs);
+
 int segsites(array_t *sfs);
-double a1(int n);
-double a2(int n);
+double calc_a1(int n);
+double calc_a2(int n);
+double calc_e1(int n, double a1);
+double calc_e2(int n, double a1, double a2);
+
+int numSitesInDataWin(pair_t* win);
 
 #endif
