@@ -18,7 +18,7 @@
 #include "divstats-winstats.h"
 
 double ehh_from_hfs(HaplotypeFrequencySpectrum *hfs) {
-   if(hfs == NULL) return -9;
+   if (hfs == NULL) return -9;
    map<string, int>::iterator it;
    double tot = 0;
    double homozygosity = 0;
@@ -354,6 +354,27 @@ double pi_from_sfs(array_t *sfs) {
       pi += i * (n - i) * sfs->data[i];
    }
    return pi / denominator;
+}
+
+double fayWuH_from_sfs(array_t *sfs, double pi){
+   if(sfs == NULL) return -9;
+   if(pi < 0){
+      pi = pi_from_sfs(sfs);
+   }
+   return (pi - thetaH_from_sfs(sfs));
+}
+
+double thetaH_from_sfs(array_t *sfs) {
+   if (sfs == NULL) return -9;
+   double thetaH = 0;
+   int n = sfs->size - 1;
+   double denominator = n * (n - 1) * 0.5;
+
+   for (int i = 1; i < n; i++) {
+      thetaH += i * i * sfs->data[i];
+   }
+   return thetaH / denominator;
+
 }
 
 double tajimaD_from_sfs(array_t *sfs, double pi, double S) {

@@ -40,6 +40,8 @@ double pi_numerator_btw_pools(string *haps1, int length1, string *haps2, int len
 double pi_numerator(string *haps, int length, map<string, int> &hap2count);
 
 double tajimaD_from_sfs(array_t *sfs, double pi = -9, double S = -9);
+double thetaH_from_sfs(array_t *sfs);
+double fayWuH_from_sfs(array_t *sfs, double pi);
 
 double ehh_from_hfs(HaplotypeFrequencySpectrum *hfs);
 

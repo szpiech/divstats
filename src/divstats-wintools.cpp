@@ -126,10 +126,14 @@ void calc_stats(void *order) {
 			}
 			else if (STATS[j].compare(ARG_FAY_WU_H) == 0 && params->getBoolFlag(ARG_FAY_WU_H)) {
 				if (i == 0) (*names) += "H ";
-				results[i][s] = -9;
+				if (s_pi >= 0) results[i][s] = fayWuH_from_sfs(sfs, results[i][s_pi]);
+				else results[i][s] = fayWuH_from_sfs(sfs);
 				s++;
 			}
 		}
+
+		releaseArray(sfs);
+
 		if (DO_PARTITION) {
 			char part[2];
 			part[0] = 'A';
@@ -138,17 +142,8 @@ void calc_stats(void *order) {
 			for (int p = 0; p < partition_windows->size(); p++) {
 				int s_pi0 = -9;
 				int s_S0 = -9;
-
 				string partStr(part);
 				partition_snps = partition_windows->at(p);
-				/*
-				if (numSitesInDataWin(partition_snps) <= 0) {
-					for (int s = 0; s < numStats; s++) {
-						results[i][s] = -9;
-					}
-					continue;
-				}
-				*/
 				partition_sfs = sfs_window(freqData, partition_snps);
 
 				for (int j = 0; j < NOPTS; j++) {
@@ -183,7 +178,8 @@ void calc_stats(void *order) {
 					}
 					else if (STATS[j].compare(ARG_FAY_WU_H) == 0 && params->getBoolFlag(ARG_FAY_WU_H)) {
 						if (i == 0) (*names) += "H_" + partStr + " ";
-						results[i][s] = -9;
+						if (s_pi0 >= 0) results[i][s] = fayWuH_from_sfs(partition_sfs, results[i][s_pi0]);
+						else results[i][s] = fayWuH_from_sfs(partition_sfs);
 						s++;
 					}
 				}
@@ -191,7 +187,6 @@ void calc_stats(void *order) {
 				releaseArray(partition_sfs);
 			}
 		}
-		releaseArray(sfs);
 	}
 	return;
 }
