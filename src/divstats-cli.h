@@ -60,9 +60,10 @@ const string HELP_SEGSITES = "Set this flag to calculate the number of segregati
 
 const string ARG_EHH = "--ehh";
 const int DEFAULT_EHH = 0;
-const string HELP_EHH = "A list of window sizes within which to calculate EHH. These will be\n\
-\tcentered on the middle of the current window and may not be larger than --winsize.\n\
-\tSet to 0 to simply calculate within the entire window.";
+const string HELP_EHH = "A list of window sizes within which to calculate EHH.\n\
+\tThese subwindows will be centered on the middle of the current\n\
+\twindow and may not be larger than --winsize. Set to 0 to simply\n\
+\tcalculate within the entire window.";
 
 const string ARG_EHHK = "--ehhk";
 const int DEFAULT_EHHK = 0;
@@ -78,6 +79,13 @@ const string HELP_TAJ_D = "Set this flag to calculate Tajima's D.";
 const string ARG_FAY_WU_H = "--h";
 const bool DEFAULT_FAY_WU_H = false;
 const string HELP_FAY_WU_H = "Set this flag to calculate Fay and Wu's H.";
+
+// Other flags
+const string ARG_EHH_PART = "--ehh-part";
+const bool DEFAULT_EHH_PART = false;
+const string HELP_EHH_PART = "Calculates EHH/EHHK in any partitions of the main window.\n\
+\tTo be distinguished from --ehh, which calculates EHH in sub-windows\n\
+\tcentered on the main window.  Requires --ehh/--ehhk to be set.";
 
 #define NOPTS 7
 

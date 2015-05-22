@@ -1,8 +1,9 @@
 #include "divstats-wintools.h"
 
+
 vector< pair_t* > *findAllWindows(MapData *mapData, int WINSIZE, int WINSTEP) {
-	int currWinStart = 1;//mapData->physicalPos[0];
-	int currWinEnd = currWinStart + WINSIZE - 1;
+	//int currWinStart = 0;//mapData->physicalPos[0];
+	//int currWinEnd = currWinStart + WINSIZE - 1;
 	int numSnps = mapData->nloci;
 	int endOfData = mapData->physicalPos[numSnps - 1];
 	pair_t *snpIndex = new pair_t;
@@ -11,7 +12,7 @@ vector< pair_t* > *findAllWindows(MapData *mapData, int WINSIZE, int WINSTEP) {
 	int numInWindow;
 
 	vector< pair_t* > *windows = new vector< pair_t* >;
-	for (currWinStart; currWinStart < endOfData; currWinStart += WINSTEP, currWinEnd += WINSTEP) {
+	for (int currWinStart = 0; currWinStart < endOfData; currWinStart += WINSTEP/*, currWinEnd += WINSTEP*/) {
 
 		//Find SNP index boundaries for the whole window
 		pair_t *snps = findInclusiveSNPIndicies(snpIndex->start, currWinStart, WINSIZE, mapData);
@@ -50,16 +51,17 @@ void calc_stats(void *order) {
 
 	int numThreads = params->getIntFlag(ARG_THREADS);
 	array_t *sfs, *partition_sfs;
-	HaplotypeFrequencySpectrum *hfs, *partition_hfs;
+	HaplotypeFrequencySpectrum *hfs, *partition_hfs, *pik_hfs;
 	pair_t *snps, *partition_snps;
 
 	//Cycle over all windows and calculate stats
 	for (int i = id; i < windows->size(); i += numThreads) {
 		snps = windows->at(i);
+		//cerr << "window:\n" << snps->start << " " << snps->end << "\n";
 		/*
 		if (numSitesInDataWin(snps) <= 0) {
 			for (int s = 0; s < numStats; s++) {
-				results[i][s] = -9;
+				results[i][s] = MISSING;
 			}
 			continue;
 		}
@@ -67,9 +69,9 @@ void calc_stats(void *order) {
 		sfs = sfs_window(freqData, snps);
 
 		int s = 0;
-		int s_pi = -9; //note storage location of pi if it exists
+		int s_pi = MISSING; //note storage location of pi if it exists
 		//useful for calculating Taj's D or F&W's H
-		int s_S = -9;
+		int s_S = MISSING;
 		for (int j = 0; j < NOPTS; j++) {
 			if (STATS[j].compare(ARG_PI) == 0 && params->getBoolFlag(ARG_PI)) {
 				if (i == 0) (*names) += "pi ";
@@ -78,13 +80,12 @@ void calc_stats(void *order) {
 				s++;
 			}
 			else if (STATS[j].compare(ARG_PIK) == 0 && PIK_CHOICE[0] != 0) {
-				hfs = hfs_window(hapData, snps);
+				pik_hfs = hfs_window(hapData, snps);
 				for (int k = 0; k < PIK_CHOICE.size(); k++) {
-					if (i == 0) (*names) += "pi_" + int2str(PIK_CHOICE[k]) + " ";
-					results[i][s] = pi_k2(hfs, PIK_CHOICE[k]);
+					if (i == 0) (*names) += "pi" + int2str(PIK_CHOICE[k]) + " ";
+					results[i][s] = pi_k2(pik_hfs, PIK_CHOICE[k]);
 					s++;
 				}
-				releaseHaplotypeFrequencySpectrum(hfs);
 			}
 			else if (STATS[j].compare(ARG_SEGSITES) == 0 && params->getBoolFlag(ARG_SEGSITES)) {
 				if (i == 0) (*names) += "S ";
@@ -109,7 +110,7 @@ void calc_stats(void *order) {
 					hfs = hfs_window(hapData, ehh_windows->at(w));
 					for (int k = 0; k < EHHK_CHOICES.size(); k++) {
 						if (i == 0) (*names) += "ehh" + int2str(EHHK_CHOICES[k]) + "_" + int2str(EHH_WINS[w]) + " ";
-						results[i][s] = -9;// ehhk_from_hfs(hfs,EHHK_CHOICES[k]);
+						results[i][s] = ehhk_from_hfs(hfs, EHHK_CHOICES[k]);
 						s++;
 					}
 					releaseHaplotypeFrequencySpectrum(hfs);
@@ -140,8 +141,8 @@ void calc_stats(void *order) {
 			part[1] = '\0';
 			vector< pair_t* > *partition_windows = getPartitionWindows(snps->start, snps->winStart, PARTITIONS, mapData);
 			for (int p = 0; p < partition_windows->size(); p++) {
-				int s_pi0 = -9;
-				int s_S0 = -9;
+				int s_pi0 = MISSING;
+				int s_S0 = MISSING;
 				string partStr(part);
 				partition_snps = partition_windows->at(p);
 				partition_sfs = sfs_window(freqData, partition_snps);
@@ -154,13 +155,15 @@ void calc_stats(void *order) {
 						s++;
 					}
 					else if (STATS[j].compare(ARG_PIK) == 0 && PIK_CHOICE[0] != 0) {
-						partition_hfs = hfs_window(hapData, partition_snps);
+						pair_t *shifted_snps = new pair_t;
+						shifted_snps->start = partition_snps->start - snps->start;
+						shifted_snps->end = partition_snps->end - snps->start;
 						for (int k = 0; k < PIK_CHOICE.size(); k++) {
-							if (i == 0) (*names) += "pi_" +  int2str(PIK_CHOICE[k]) + "_" + partStr + " ";
-							results[i][s] = pi_k2(partition_hfs, PIK_CHOICE[k]);
+							if (i == 0) (*names) += "pi" +  int2str(PIK_CHOICE[k]) + "_" + partStr + " ";
+							results[i][s] = pi_k2(pik_hfs, PIK_CHOICE[k], shifted_snps);
 							s++;
 						}
-						releaseHaplotypeFrequencySpectrum(partition_hfs);
+						delete shifted_snps;
 					}
 					else if (STATS[j].compare(ARG_SEGSITES) == 0 && params->getBoolFlag(ARG_SEGSITES)) {
 						if (i == 0) (*names) += "S_" + partStr + " ";
@@ -182,11 +185,30 @@ void calc_stats(void *order) {
 						else results[i][s] = fayWuH_from_sfs(partition_sfs);
 						s++;
 					}
+					else if (STATS[j].compare(ARG_EHH) == 0 && EHH_WINS[0] != 0 && params->getBoolFlag(ARG_EHH_PART)) {
+						if (i == 0) (*names) += "ehh_" + partStr + " ";
+						hfs = hfs_window(hapData, partition_snps);
+						results[i][s] = ehh_from_hfs(hfs);
+						s++;
+						releaseHaplotypeFrequencySpectrum(hfs);
+					}
+					else if (STATS[j].compare(ARG_EHHK) == 0 && EHHK_CHOICES[0] != 0 && params->getBoolFlag(ARG_EHH_PART)) {
+
+						hfs = hfs_window(hapData, partition_snps);
+						for (int k = 0; k < EHHK_CHOICES.size(); k++) {
+							if (i == 0) (*names) += "ehh" + int2str(EHHK_CHOICES[k]) + "_" + partStr + " ";
+							results[i][s] = ehhk_from_hfs(hfs, EHHK_CHOICES[k]);
+							s++;
+						}
+						releaseHaplotypeFrequencySpectrum(hfs);
+
+					}
 				}
 				part[0]++;
 				releaseArray(partition_sfs);
 			}
 		}
+		releaseHaplotypeFrequencySpectrum(pik_hfs);
 	}
 	return;
 }
@@ -199,18 +221,14 @@ string int2str(int i) {
 
 vector< pair_t* > *getPartitionWindows(int snpStart, int winStart, vector<int> &PARTITIONS, MapData *mapData) {
 	vector< pair_t* > *partition_windows = new vector< pair_t* >;
-	pair_t *partitionSnpIndex = new pair_t;
-	partitionSnpIndex->start = snpStart;
-	partitionSnpIndex->end = snpStart - 1;
+	int partitionSnpIndexStart = snpStart;
 	int partitionCurrWinStart = winStart;
 	for (int i = 0; i < PARTITIONS.size(); i++) {
-		pair_t *partition_snps = findInclusiveSNPIndicies(partitionSnpIndex->start, partitionCurrWinStart, PARTITIONS[i], mapData);
+		pair_t *partition_snps = findInclusiveSNPIndicies(partitionSnpIndexStart, partitionCurrWinStart, PARTITIONS[i], mapData);
 		partition_windows->push_back(partition_snps);
-		partitionSnpIndex->start = partition_snps->start;
-		partitionSnpIndex->end = partition_snps->end;
+		partitionSnpIndexStart = partition_snps->end;
 		partitionCurrWinStart += PARTITIONS[i];
 	}
-	delete partitionSnpIndex;
 	return partition_windows;
 }
 

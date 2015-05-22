@@ -51,6 +51,9 @@ int main(int argc, char *argv[])
   params.addListFlag(ARG_EHHK, DEFAULT_EHHK, "", HELP_EHHK);
   params.addFlag(ARG_TAJ_D, DEFAULT_TAJ_D, "", HELP_TAJ_D);
   params.addFlag(ARG_FAY_WU_H, DEFAULT_FAY_WU_H, "", HELP_FAY_WU_H);
+
+  // Other flags
+  params.addFlag(ARG_EHH_PART, DEFAULT_EHH_PART, "", HELP_EHH_PART);
   params.addFlag(ARG_2_SWEEPFINDER, DEFAULT_2_SWEEPFINDER, "SILENT", HELP_2_SWEEPFINDER);
 
   try {
@@ -84,7 +87,9 @@ int main(int argc, char *argv[])
   bool CALC_TAJ_D = params.getBoolFlag(ARG_TAJ_D);
   bool CALC_FAY_WU_H = params.getBoolFlag(ARG_FAY_WU_H);
 
+  // Other flags
   bool SWEEPFINDER = params.getBoolFlag(ARG_2_SWEEPFINDER);
+  bool EHH_PART = params.getBoolFlag(ARG_EHH_PART);
 
   // Check for consistency errors within flags
   bool ERROR = false;
@@ -188,6 +193,11 @@ int main(int argc, char *argv[])
     ERROR = true;
   }
 
+  if(EHH_PART && (!CALC_EHH || !DO_PARTITION)) {
+    cerr << "ERROR: Must specify " << ARG_EHH << " in order to use " << ARG_EHH_PART << ".\n";
+    ERROR = true;
+  }
+
   if (ERROR) {
     return 1;
   }
@@ -225,6 +235,7 @@ int main(int argc, char *argv[])
                   CALC_TAJ_D +
                   CALC_FAY_WU_H) *
                  (DO_PARTITION * PARTITIONS.size() + 1) +
+                 (EHH_PART + EHH_PART * CALC_EHHK * EHHK_CHOICES.size()) * (DO_PARTITION * PARTITIONS.size()) +
                  (CALC_EHH * EHH_WINS.size() +
                   CALC_EHHK * EHHK_CHOICES.size() * EHH_WINS.size());
 
@@ -268,7 +279,7 @@ int main(int argc, char *argv[])
 
   fout << "chr start end " << names << endl;
   for (int w = 0; w < windows->size(); w++) {
-    fout << mapData->chr << " " << windows->at(w)->winStart << " " << windows->at(w)->winStart + WINSTEP;
+    fout << mapData->chr << " " << windows->at(w)->winStart << " " << windows->at(w)->winStart + WINSIZE;
     for (int s = 0; s < numStats; s++) {
       fout << " " << results[w][s];
     }

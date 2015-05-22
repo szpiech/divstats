@@ -33,8 +33,8 @@ LINK_OPTS = $(L_PATH)/libgsl.a $(L_PATH)/libgslcblas.a
 
 all : divstats
 
-divstats : divstats-main.o divstats-data.o binom.o param_t.o gzstream.o hamming_t.o divstats-winstats.o divstats-wintools.o
-	$(CC) $(G++FLAG) -o divstats divstats-main.o divstats-data.o binom.o param_t.o gzstream.o hamming_t.o divstats-winstats.o divstats-wintools.o $(LINK_OPTS2) $(LINK_OPTS)
+divstats : divstats-main.o divstats-data.o binom.o param_t.o gzstream.o divstats-winstats.o divstats-wintools.o
+	$(CC) $(G++FLAG) -o divstats divstats-main.o divstats-data.o binom.o param_t.o gzstream.o divstats-winstats.o divstats-wintools.o $(LINK_OPTS2) $(LINK_OPTS)
 
 divstats-main.o : divstats-main.cpp
 	$(CC) $(G++FLAG) -c divstats-main.cpp $(I_PATH)
@@ -56,9 +56,6 @@ param_t.o : param_t.cpp
 
 gzstream.o : gzstream.cpp
 	$(CC) $(G++FLAG) -c gzstream.cpp $(I_PATH)
-
-hamming_t.o : hamming_t.cpp
-	$(CC) $(G++FLAG) -c hamming_t.cpp $(I_PATH)
 
 clean :
 	rm *.o

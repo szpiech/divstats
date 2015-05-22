@@ -26,7 +26,7 @@
 
 using namespace std;
 
-const int MISSING = -9999;
+const double MISSING = -999;
 const char MISSING_CHAR = '9';
 
 struct HaplotypeData

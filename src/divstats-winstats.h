@@ -19,7 +19,6 @@
 #ifndef __DIVSTATS_WINSTATS_H__
 #define __DIVSTATS_WINSTATS_H__
 
-#include "hamming_t.h"
 #include "divstats-data.h"
 #include <map>
 #include <cstdlib>
@@ -35,15 +34,19 @@ HaplotypeFrequencySpectrum *hfs_window(HaplotypeData *hapData, pair_t* snpIndex)
 double pi_window(HaplotypeData *hapData, pair_t* snpIndex);
 double pi_from_sfs(array_t *sfs);
 double pi_k(HaplotypeFrequencySpectrum *hfs, int k);
-double pi_k2(HaplotypeFrequencySpectrum *hfs, int k);
-double pi_numerator_btw_pools(string *haps1, int length1, string *haps2, int length2, map<string, int> &hap2count);
-double pi_numerator(string *haps, int length, map<string, int> &hap2count);
+double pi_k2(HaplotypeFrequencySpectrum *hfs, int k, pair_t *subset_snps = NULL);
+double pi_numerator_btw_pools(string *haps1, int length1, string *haps2, int length2, map<string, int> &hap2count, pair_t *subset_snps = NULL);
+double pi_numerator(string *haps, int length, map<string, int> &hap2count, pair_t *subset_snps = NULL);
+int hamming_dist_str(string one, string two, pair_t *subset_snps = NULL);
+int hamming_dist_ptr(short *one, short *two, int length);
+int hamming_dist_ptr(char *one, char *two, int length);
 
 double tajimaD_from_sfs(array_t *sfs, double pi = -9, double S = -9);
 double thetaH_from_sfs(array_t *sfs);
-double fayWuH_from_sfs(array_t *sfs, double pi);
+double fayWuH_from_sfs(array_t *sfs, double pi = -9);
 
 double ehh_from_hfs(HaplotypeFrequencySpectrum *hfs);
+double ehhk_from_hfs(HaplotypeFrequencySpectrum *hfs, int k);
 
 int segsites(array_t *sfs);
 double calc_a1(int n);
@@ -52,5 +55,7 @@ double calc_e1(int n, double a1);
 double calc_e2(int n, double a1, double a2);
 
 int numSitesInDataWin(pair_t* win);
+
+//const double MISSING = -999999999;
 
 #endif

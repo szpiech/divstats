@@ -17,49 +17,188 @@
 */
 #include "divstats-winstats.h"
 
-double ehh_from_hfs(HaplotypeFrequencySpectrum *hfs) {
-   if (hfs == NULL) return -9;
+int hamming_dist_ptr(short *one, short *two, int length)
+{
+   if(length == 0) return 0;
+
+   int diff = 0;
+
+   for(int i = 0; i < length; i++)
+   {
+      if(one[i] != two[i]) diff++;
+   }
+
+   return diff;
+}
+
+int hamming_dist_ptr(char *one, char *two, int length)
+{
+   if(length == 0) return 0;
+
+   int diff = 0;
+
+   for(int i = 0; i < length; i++)
+   {
+      if(one[i] != two[i]) diff++;
+   }
+
+   return diff;
+}
+
+int hamming_dist_str(string one, string two, pair_t *subset_snps) {
+   int diff = 0, start, end;
+   if(subset_snps == NULL){
+      start = 0;
+      end = one.length()-1;
+   }
+   else{
+      start = subset_snps->start;
+      end = subset_snps->end;
+   }
+   for (int i = start; i <= end; i++)
+   {
+      if (one[i] != two[i]) diff++;
+   }
+   return diff;
+}
+
+double ehh_from_hfs(HaplotypeFrequencySpectrum * hfs) {
+   if (hfs == NULL) return MISSING;
    map<string, int>::iterator it;
    double tot = 0;
    double homozygosity = 0;
    for (it = hfs->hap2count.begin(); it != hfs->hap2count.end(); it++) {
       tot += it->second;
-      homozygosity += nCk(it->second, 2);
+      homozygosity += (it->second > 1) ? nCk(it->second, 2) : 0;
    }
    homozygosity /= nCk(tot, 2);
    return homozygosity;
 }
 
-double pi_numerator_btw_pools(string *haps1, int length1, string *haps2, int length2, map<string, int> &hap2count) {
+double ehhk_from_hfs(HaplotypeFrequencySpectrum * hfs, int k) {
+   if (hfs == NULL) return MISSING;
+   double res = 0;
+   double homozygosity = 0;
+   double tot = 0;
+   map<string, int>::iterator it;
+   int *sortedCounts = new int[hfs->hap2count.size()];
+   int i = 0;
+   for (it = hfs->hap2count.begin(); it != hfs->hap2count.end(); it++) {
+      tot += it->second;
+      homozygosity += (it->second > 1) ? nCk(it->second, 2) : 0;
+      sortedCounts[i] = it->second;
+      i++;
+   }
+
+   qsort(sortedCounts, hfs->hap2count.size(), sizeof(int), compare);
+
+   res = homozygosity;
+   int combined = 0;
+   int maxK = k = (hfs->numUniq < k) ? hfs->numUniq : k;
+   for (int i = 0; i < maxK; i++) {
+      combined += sortedCounts[i];
+      res -= (sortedCounts[i] > 1) ? nCk(sortedCounts[i], 2) : 0;
+   }
+
+   res += (combined > 1) ? nCk(combined, 2) : 0;
+
+   delete [] sortedCounts;
+
+   return (res / nCk(tot, 2));
+}
+
+double pi_numerator_btw_pools(string * haps1, int length1, string * haps2, int length2, map<string, int> &hap2count, pair_t *subset_snps) {
    double num = 0;
 
    for (int i = 0; i < length1; i++) {
       for (int j = 0; j < length2; j++) {
-         num += hamming_dist_str(haps1[i], haps2[j]) * hap2count[haps1[i]] * hap2count[haps2[j]];
+         num += hamming_dist_str(haps1[i], haps2[j], subset_snps) * hap2count[haps1[i]] * hap2count[haps2[j]];
       }
    }
 
    return num;
 }
 
-double pi_numerator(string *haps, int length, map<string, int> &hap2count) {
+double pi_numerator(string * haps, int length, map<string, int> &hap2count, pair_t *subset_snps) {
    double num = 0;
 
    for (int i = 0; i < length; i++) {
       for (int j = i + 1; j < length; j++) {
-         num += hamming_dist_str(haps[i], haps[j]) * hap2count[haps[i]] * hap2count[haps[j]];
+         num += hamming_dist_str(haps[i], haps[j], subset_snps) * hap2count[haps[i]] * hap2count[haps[j]];
       }
    }
 
    return num;
 }
 
-double pi_k2(HaplotypeFrequencySpectrum *hfs, int k) {
-   if (hfs == NULL) return -9;
+/*
+   Here we define pi_k as pi restricted to haplotypes belonging to the first
+   k haplotype classes.  For example consider the following haplotype
+   spectrum:
+
+   count   hap
+   10      011
+    5      001
+    3      111
+    1      000
+
+   Then for k = 2 we calculate pi amongst the following subset of haplotypes:
+
+   count   hap
+   10      011
+    5      001
+
+   And for k = 3 we calculate pi amonst the following subset of haplotypes:
+
+   count   hap
+   10      011
+    5      001
+    3      111
+
+   What do we do if there are ties in a frequency class?  For example:
+
+   count   hap
+   10      011
+    5      001
+    5      100
+    3      111
+    1      000
+
+   Then for k = 2 we calculate the average pi amongst the following pairs subset of haplotypes:
+
+   count   hap
+   10      011
+    5      001
+
+    and
+
+    count   hap
+   10      011
+    5      100
+
+   What if there are > 2 ties? For example:
+
+   count   hap
+   10      011
+    5      001
+    5      100
+    5      111
+    1      000
+
+   Here there is a three-way tie for the 2nd most frequent haplotype.  For k = 2, we
+   calculate pi amongst the top two most frequent classes for each of
+   the three choices of haplotypes and report the mean.  For k = 3, we must choose 2
+   of the tied haplotype classes to represent the 2nd and 3rd most frequent haplotypes.
+   There are 3 choose 2 ways to make this choice, and we take the mean across them.
+
+*/
+double pi_k2(HaplotypeFrequencySpectrum * hfs, int k, pair_t *subset_snps/*this is assumed to be offset*/) {
+   if (hfs == NULL || (hfs->numUniq < k)) return MISSING;
+
    pair <multimap<int, string>::iterator, multimap<int, string>::iterator> ret;
    multimap<int, string>::iterator it;
 
-   k = (hfs->numUniq < k) ? hfs->numUniq : k;
+   //k = (hfs->numUniq < k) ? hfs->numUniq : k;
 
    string *haps = new string[k];
 
@@ -97,10 +236,12 @@ double pi_k2(HaplotypeFrequencySpectrum *hfs, int k) {
 
    int numHapsMissing = k - howmanyUniqHaps;
 
-   //cout << "-----\n";
-   for (int i = 0; i < howmanyUniqHaps; i++) {
-      //cout << "  " << haps[i] << " " << hfs->hap2count[haps[i]] << endl;
-   }
+   /*
+      cout << "-----\n";
+      for (int i = 0; i < howmanyUniqHaps; i++) {
+         cout << "  " << haps[i] << " " << hfs->hap2count[haps[i]] << endl;
+      }
+   */
 
    double pi = 0;
    int nhaps = 0;
@@ -110,7 +251,7 @@ double pi_k2(HaplotypeFrequencySpectrum *hfs, int k) {
       for (int i = 0; i < k; i++) nhaps += hfs->hap2count[haps[i]];
       denominator = (nhaps) * (nhaps - 1) * 0.5;
       //cout << pi / denominator << endl;
-      return pi_numerator(haps, k, hfs->hap2count) / denominator;
+      return pi_numerator(haps, k, hfs->hap2count, subset_snps) / denominator;
    }
    else {
       for (int i = 0; i < k; i++) {
@@ -122,13 +263,13 @@ double pi_k2(HaplotypeFrequencySpectrum *hfs, int k) {
          }
       }
       denominator = (nhaps) * (nhaps - 1) * 0.5;
-      double pi_partial = pi_numerator(haps, howmanyUniqHaps, hfs->hap2count);
+      double pi_partial = pi_numerator(haps, howmanyUniqHaps, hfs->hap2count, subset_snps);
       gsl_combination * c;
       c = gsl_combination_calloc (numNextClass, numHapsMissing);
 
       //cout << "--next class--\n";
       string *chosenHaps = new string[numHapsMissing];
-      double pi_combo = 0;
+      //double pi_combo = 0;
       do
       {
          //cout << "[ ";
@@ -138,12 +279,14 @@ double pi_k2(HaplotypeFrequencySpectrum *hfs, int k) {
          }
          //cout << "] " << hfs->hap2count[chosenHaps[0]] << " : ";
          pi += pi_partial +
-               pi_numerator_btw_pools(haps, howmanyUniqHaps, chosenHaps, numHapsMissing, hfs->hap2count) +
-               pi_numerator(chosenHaps, numHapsMissing, hfs->hap2count);
+               pi_numerator_btw_pools(haps, howmanyUniqHaps, chosenHaps, numHapsMissing, hfs->hap2count, subset_snps) +
+               pi_numerator(chosenHaps, numHapsMissing, hfs->hap2count, subset_snps);
+         /*
          pi_combo = pi_partial +
                     pi_numerator_btw_pools(haps, howmanyUniqHaps, chosenHaps, numHapsMissing, hfs->hap2count) +
                     pi_numerator(chosenHaps, numHapsMissing, hfs->hap2count);
-         //cout << pi_combo << " / " << denominator << " -> " << pi_combo / denominator << endl;
+         cout << pi_combo << " / " << denominator << " -> " << pi_combo / denominator << endl;
+         */
 
       } while (gsl_combination_next (c) == GSL_SUCCESS);
       pi /= nCk(numNextClass, numHapsMissing);
@@ -161,50 +304,10 @@ double pi_k2(HaplotypeFrequencySpectrum *hfs, int k) {
    delete [] haps;
 
    return pi / denominator;
-
-
-
-
-   //Grab the first k most frequent haplotypes
-   //Right now if there are ties in the final one
-   //we only take the first few upto k total haplotypes
-   //In the future, will take the mean
-   /*
-      int i = 0;
-      for (int j = 0; j < hfs->size; j++) {
-         int key = hfs->sortedCount[j];
-         pair <multimap<int, string>::iterator, multimap<int, string>::iterator> ret;
-         ret = hfs->count2hap.equal_range(key);
-         multimap<int, string>::iterator it;
-
-         for (it = ret.first; it != ret.second; it++) {
-            haps[i] = it->second;
-            i++;
-            if (i >= k) break;
-         }
-         if (it != ret.second) break;
-      }
-
-      double pi_k = 0;
-      int nhaps = 0;
-      for (i = 0; i < k; i++) nhaps += hfs->hap2count[haps[i]];
-
-      double denominator = (nhaps) * (nhaps - 1) * 0.5;
-
-      for (i = 0; i < k; i++) {
-         for (int j = i + 1; j < k; j++) {
-            pi_k += hamming_dist_str(haps[i], haps[j]) * hfs->hap2count[haps[i]] * hfs->hap2count[haps[j]];
-         }
-      }
-
-      delete [] haps;
-
-      return pi_k / denominator;
-   */
 }
 
-double pi_k(HaplotypeFrequencySpectrum *hfs, int k) {
-   if (hfs == NULL) return -9;
+double pi_k(HaplotypeFrequencySpectrum * hfs, int k) {
+   if (hfs == NULL) return MISSING;
    k = (hfs->numUniq < k) ? hfs->numUniq : k;
    string *haps = new string[k];
 
@@ -243,7 +346,7 @@ double pi_k(HaplotypeFrequencySpectrum *hfs, int k) {
    return pi_k / denominator;
 }
 
-HaplotypeFrequencySpectrum *hfs_window(HaplotypeData *hapData, pair_t* snpIndex) {
+HaplotypeFrequencySpectrum *hfs_window(HaplotypeData * hapData, pair_t* snpIndex) {
    if (numSitesInDataWin(snpIndex) <= 0) return NULL;
 
    HaplotypeFrequencySpectrum *hfs = initHaplotypeFrequencySpectrum();
@@ -314,8 +417,8 @@ int compare (const void *a, const void *b)
    return ( *(int *)b - * (int *)a );
 }
 
-double pi_window(HaplotypeData *hapData, pair_t* snpIndex) {
-   if (numSitesInDataWin(snpIndex) <= 0) return -9;
+double pi_window(HaplotypeData * hapData, pair_t* snpIndex) {
+   if (numSitesInDataWin(snpIndex) <= 0) return MISSING;
    //int startSnpIndex; int endSnpIndex;
    double pi = 0;
    double denominator = (hapData->nhaps) * (hapData->nhaps - 1) * 0.5;
@@ -333,7 +436,7 @@ double pi_window(HaplotypeData *hapData, pair_t* snpIndex) {
    return (pi / denominator);
 }
 
-array_t *sfs_window(FreqData *freqData, pair_t* snpIndex) {
+array_t *sfs_window(FreqData * freqData, pair_t* snpIndex) {
    if (numSitesInDataWin(snpIndex) <= 0) return NULL;
    array_t *sfs = initArray(freqData->nhaps + 1);
 
@@ -345,7 +448,7 @@ array_t *sfs_window(FreqData *freqData, pair_t* snpIndex) {
 }
 
 double pi_from_sfs(array_t *sfs) {
-   if (sfs == NULL) return -9;
+   if (sfs == NULL) return MISSING;
    double pi = 0;
    int n = sfs->size - 1;
    double denominator = n * (n - 1) * 0.5;
@@ -356,16 +459,16 @@ double pi_from_sfs(array_t *sfs) {
    return pi / denominator;
 }
 
-double fayWuH_from_sfs(array_t *sfs, double pi){
-   if(sfs == NULL) return -9;
-   if(pi < 0){
+double fayWuH_from_sfs(array_t *sfs, double pi) {
+   if (sfs == NULL) return MISSING;
+   if (pi < 0) {
       pi = pi_from_sfs(sfs);
    }
    return (pi - thetaH_from_sfs(sfs));
 }
 
 double thetaH_from_sfs(array_t *sfs) {
-   if (sfs == NULL) return -9;
+   if (sfs == NULL) return MISSING;
    double thetaH = 0;
    int n = sfs->size - 1;
    double denominator = n * (n - 1) * 0.5;
@@ -374,11 +477,10 @@ double thetaH_from_sfs(array_t *sfs) {
       thetaH += i * i * sfs->data[i];
    }
    return thetaH / denominator;
-
 }
 
 double tajimaD_from_sfs(array_t *sfs, double pi, double S) {
-   if (sfs == NULL) return -9;
+   if (sfs == NULL) return MISSING;
    if (pi < 0) {
       pi = pi_from_sfs(sfs);
    }
@@ -400,7 +502,7 @@ double tajimaD_from_sfs(array_t *sfs, double pi, double S) {
 }
 
 int segsites(array_t *sfs) {
-   if (sfs == NULL) return -9;
+   if (sfs == NULL) return MISSING;
    double s = 0;
    int n = sfs->size - 1;
    for (int i = 1; i < n; i++) {
@@ -410,7 +512,7 @@ int segsites(array_t *sfs) {
 }
 
 double s_from_sfs(array_t *sfs) {
-   if (sfs == NULL) return -9;
+   if (sfs == NULL) return MISSING;
    double s = 0;
    int n = sfs->size - 1;
 
