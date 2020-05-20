@@ -7,7 +7,7 @@
 
 #for osx systems
 CC = g++
-G++FLAG = -fast -m64 -mmmx -msse -msse2
+G++FLAG = -O3 -m64 -mmmx -msse -msse2
 #LINK_OPTS2 = -pthread -lz -lgsl -lgslcblas
 LINK_OPTS2 = -lz -pthread
 #-lgsl -lgslcblas

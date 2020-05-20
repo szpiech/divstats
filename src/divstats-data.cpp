@@ -166,6 +166,7 @@ MapData *readMapData(string filename, int expected_loci)
         fin >> data->locusName[locus];
         fin >> data->geneticPos[locus];
         fin >> data->physicalPos[locus];
+        //if (USE_PMAP) data->geneticPos[locus] = data->physicalPos[locus];
     }
 
     fin.close();
@@ -230,6 +231,69 @@ MapData *readMapDataTPED(string filename, int expected_loci, int expected_haps)
         fin >> data->geneticPos[locus];
         fin >> data->physicalPos[locus];
         getline(fin, line);
+    }
+
+    fin.close();
+    return data;
+}
+
+MapData *readMapDataVCF(string filename, int expected_loci) {
+    igzstream fin;
+    cerr << "Opening " << filename << "...\n";
+    fin.open(filename.c_str());
+
+    if (fin.fail())
+    {
+        cerr << "ERROR: Failed to open " << filename << " for reading.\n";
+        throw 0;
+    }
+
+    string line;
+    int nloci = 0;
+    int numCommentedLines = 0;
+    while (getline(fin, line))
+    {
+        if (line[0] == '#') {
+            numCommentedLines++;
+        }
+        else {
+            nloci++;
+        }
+    }
+
+    if (nloci != expected_loci)
+    {
+        cerr << "ERROR: Expected " << expected_loci << " loci in file but found " << nloci << ".\n";
+        throw 0;
+    }
+
+    fin.clear(); // clear error flags
+    //fin.seekg(fileStart);
+    fin.close();
+    fin.open(filename.c_str());
+
+    if (fin.fail())
+    {
+        cerr << "ERROR: Failed to open " << filename << " for reading.\n";
+        throw 0;
+    }
+
+    cerr << "Loading map data for " << nloci << " loci\n";
+
+    for (int i = 0; i < numCommentedLines; i++) {
+        getline(fin, line);
+    }
+
+    MapData *data = initMapData(nloci);
+
+    string chr;
+    for (int locus = 0; locus < data->nloci; locus++)
+    {
+        fin >> data->chr;
+        fin >> data->physicalPos[locus];
+        fin >> data->locusName[locus];
+        getline(fin, line);
+        data->geneticPos[locus] = data->physicalPos[locus];
     }
 
     fin.close();
@@ -422,6 +486,112 @@ HaplotypeData *readHaplotypeDataTPED(string filename)
                 cerr << "ERROR:  Alleles must be coded 0/1 only.\n";
                 throw 0;
             }
+        }
+    }
+
+    fin.close();
+
+    return data;
+}
+
+HaplotypeData *readHaplotypeDataVCF(string filename)
+{
+    igzstream fin;
+    cerr << "Opening " << filename << "...\n";
+    fin.open(filename.c_str());
+
+    if (fin.fail())
+    {
+        cerr << "ERROR: Failed to open " << filename << " for reading.\n";
+        throw 0;
+    }
+
+    int numMapCols = 9;
+    //int fileStart = fin.tellg();
+    string line;
+    int nloci = 0;
+    int previous_nhaps = -1;
+    int current_nhaps = 0;
+    //Counts number of haps (cols) and number of loci (rows)
+    //if any lines differ, send an error message and throw an exception
+    while (getline(fin, line))
+    {
+        if (line[0] == '#') {
+            continue;
+        }
+        //getline(fin,line);
+        //if(fin.eof()) break;
+        nloci++;
+        current_nhaps = countFields(line);
+        //cout << "nloci: " << current_nhaps << endl;
+        if (previous_nhaps < 0)
+        {
+            previous_nhaps = current_nhaps;
+            continue;
+        }
+        else if (previous_nhaps != current_nhaps)
+        {
+            cerr << "ERROR: line " << nloci << " of " << filename << " has " << current_nhaps
+                 << " fields, but the previous line has " << previous_nhaps << " fields.\n";
+            throw 0;
+        }
+        previous_nhaps = current_nhaps;
+    }
+
+    fin.clear(); // clear error flags
+    //fin.seekg(fileStart);
+    fin.close();
+    fin.open(filename.c_str());
+
+    if (fin.fail())
+    {
+        cerr << "ERROR: Failed to open " << filename << " for reading.\n";
+        throw 0;
+    }
+
+    int nhaps = (current_nhaps - numMapCols) * 2;
+    int nfields = (current_nhaps - numMapCols);
+    cerr << "Loading " << nhaps << " haplotypes and " << nloci << " loci...\n";
+
+    HaplotypeData *data = initHaplotypeData(nhaps, nloci);
+
+    string junk;
+    char allele1, allele2, separator;
+    bool skipLine = false;
+    for (int locus = 0; locus < data->nloci; locus++)
+    {
+        for (int i = 0; i < numMapCols; i++) {
+            fin >> junk;
+            if (i == 0 && junk[0] == '#') {
+                skipLine = true;
+                break;
+            }
+        }
+        if (skipLine) {
+            getline(fin, junk);
+            skipLine = false;
+            locus--;
+            continue;
+        }
+        for (int field = 0; field < nfields; field++)
+        {
+            fin >> junk;
+            allele1 = junk[0];
+            separator = junk[1];
+            allele2 = junk[2];
+            if ( (allele1 != '0' && allele1 != '1') || (allele2 != '0' && allele2 != '1') )
+            {
+                cerr << "ERROR: Alleles must be coded 0/1 only.\n";
+                cerr << allele1 << " " << allele2 << endl;
+                throw 0;
+            }
+
+            //if(separator != '|'){
+            //    cerr << "ERROR:  Alleles must be coded 0/1 only.\n";
+            //    throw 0;
+            //}
+            data->data[2 * field][locus] = allele1;
+            data->data[2 * field + 1][locus] = allele2;
         }
     }
 

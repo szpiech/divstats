@@ -37,8 +37,13 @@ int main(int argc, char *argv[])
   // I/O flags
   params.addFlag(ARG_FILENAME_TPED, DEFAULT_FILENAME_TPED, "", HELP_FILENAME_TPED);
   params.addFlag(ARG_OUTFILE, DEFAULT_OUTFILE, "", HELP_OUTFILE);
-
+  params.addFlag(ARG_FILENAME_POP1_VCF, DEFAULT_FILENAME_POP1_VCF, "", HELP_FILENAME_POP1_VCF);
+  params.addFlag(ARG_FILENAME_MAP, DEFAULT_FILENAME_MAP, "", HELP_FILENAME_MAP);
+  params.addFlag(ARG_PMAP, DEFAULT_PMAP, "", HELP_PMAP);
+    
   // Window control flags
+  params.addFlag(ARG_BP, DEFAULT_BP, "", HELP_BP);
+  params.addFlag(ARG_SITES, DEFAULT_SITES, "", HELP_SITES);
   params.addFlag(ARG_WINSIZE, DEFAULT_WINSIZE, "", HELP_WINSIZE);
   params.addFlag(ARG_WINSTEP, DEFAULT_WINSTEP, "", HELP_WINSTEP);
   params.addListFlag(ARG_PARTITION, DEFAULT_PARTITION, "", HELP_PARTITION);
@@ -67,9 +72,16 @@ int main(int argc, char *argv[])
 
   // I/O
   string tpedFilename = params.getStringFlag(ARG_FILENAME_TPED);
+  bool TPED = (tpedFilename.compare(DEFAULT_FILENAME_TPED) == 0) ? false : true;
+  string vcfFilename = params.getStringFlag(ARG_FILENAME_POP1_VCF);
+  bool VCF = (vcfFilename.compare(DEFAULT_FILENAME_POP1_VCF) == 0) ? false : true;
+  string mapFilename = params.getStringFlag(ARG_FILENAME_MAP);
+  bool MAP = (mapFilename.compare(DEFAULT_FILENAME_MAP) == 0) ? false : true;
   string outfileBase = params.getStringFlag(ARG_OUTFILE);
 
   // Window control
+  bool USE_BP = params.getBoolFlag(ARG_BP);
+  bool USE_SITES = params.getBoolFlag(ARG_SITES);
   int WINSIZE = params.getIntFlag(ARG_WINSIZE);
   int WINSTEP = params.getIntFlag(ARG_WINSTEP);
   vector<int> PARTITIONS = params.getIntListFlag(ARG_PARTITION);
@@ -90,17 +102,18 @@ int main(int argc, char *argv[])
   // Other flags
   bool SWEEPFINDER = params.getBoolFlag(ARG_2_SWEEPFINDER);
   bool EHH_PART = params.getBoolFlag(ARG_EHH_PART);
+  bool PMAP = params.getBoolFlag(ARG_PMAP);
 
   // Check for consistency errors within flags
   bool ERROR = false;
 
-  if (numThreads <= 0) {
-    cerr << "ERROR: Must specify a positive number of threads.\n";
+  if (!USE_SITES && !USE_BP){
+    cerr << "ERROR: Must choose to measure windows in either sites or bps.\n";
     ERROR = true;
   }
 
-  if (tpedFilename.compare(DEFAULT_FILENAME_TPED) == 0) {
-    cerr << "ERROR: Must provide a TPED file.\n";
+  if (USE_SITES && USE_BP){
+    cerr << "ERROR: Must choose to measure windows in either sites or bps not both.\n";
     ERROR = true;
   }
 
@@ -112,45 +125,6 @@ int main(int argc, char *argv[])
   if (WINSTEP < 1) {
     cerr << "ERROR: Window step size needs to be greater than 0.\n";
     ERROR = true;
-  }
-
-  int partitionTotalSize = 0;
-  for (int i = 0; i < PARTITIONS.size(); i++) {
-    partitionTotalSize += PARTITIONS[i];
-    if (PARTITIONS.size() > 1 && PARTITIONS[i] <= 0) {
-      cerr << "ERROR: Partitions must be > 0. Found partition " << i + 1 << " equal to " << PARTITIONS[i] << ".\n";
-      ERROR = true;
-    }
-  }
-
-  if (partitionTotalSize <= 0 && PARTITIONS.size() == 1) {
-    DO_PARTITION = false;
-  }
-  else if (partitionTotalSize < WINSIZE || partitionTotalSize > WINSIZE) {
-    cerr << "ERROR: Window partitions sum to " << partitionTotalSize << " but must sum to " << WINSIZE << " instead.\n";
-    ERROR = true;
-  }
-  else if (PARTITIONS.size() > MAX_PARTITION) {
-    cerr << "ERROR: Request for " << PARTITIONS.size() << " partitions exceeds maximum allowed (" << WINSIZE << ").\n";
-    ERROR = true;
-  }
-  else {
-    DO_PARTITION = true;
-  }
-
-  for (int i = 0; i < PIK_CHOICE.size(); i++) {
-    if (PIK_CHOICE.size() > 1 && PIK_CHOICE[i] <= 0) {
-      cerr << "ERROR: When chosing one or more k for the k most frequent haplotypes,\n\
-      \tk must be > 0. Found k number " << i + 1 << " equal to " << PIK_CHOICE[i] << ".\n";
-      ERROR = true;
-    }
-  }
-
-  if (PIK_CHOICE.size() == 1 && PIK_CHOICE[0] <= 0) {
-    CALC_PIK = false;
-  }
-  else {
-    CALC_PIK = true;
   }
 
   for (int i = 0; i < EHH_WINS.size(); i++) {
@@ -198,6 +172,68 @@ int main(int argc, char *argv[])
     ERROR = true;
   }
 
+  bool NEED_GMAP = (CALC_EHHK || CALC_EHH || EHH_PART) && !PMAP;
+
+  if (numThreads <= 0) {
+    cerr << "ERROR: Must specify a positive number of threads.\n";
+    ERROR = true;
+  }
+
+  if (!TPED && !VCF) {
+    cerr << "ERROR: Must provide a file with genetic data.\n";
+    ERROR = true;
+  }
+
+  if (TPED && VCF) {
+    cerr << "ERROR: Must provide a TPED or VCF not both.\n";
+    ERROR = true;
+  }
+
+  if ( NEED_GMAP && !MAP ){
+    cerr << "ERROR: Must provide a mapfile or set --pmap.\n";
+    ERROR = true;
+  }
+
+  int partitionTotalSize = 0;
+  for (int i = 0; i < PARTITIONS.size(); i++) {
+    partitionTotalSize += PARTITIONS[i];
+    if (PARTITIONS.size() > 1 && PARTITIONS[i] <= 0) {
+      cerr << "ERROR: Partitions must be > 0. Found partition " << i + 1 << " equal to " << PARTITIONS[i] << ".\n";
+      ERROR = true;
+    }
+  }
+
+  if (partitionTotalSize <= 0 && PARTITIONS.size() == 1) {
+    DO_PARTITION = false;
+  }
+  else if (partitionTotalSize < WINSIZE || partitionTotalSize > WINSIZE) {
+    cerr << "ERROR: Window partitions sum to " << partitionTotalSize << " but must sum to " << WINSIZE << " instead.\n";
+    ERROR = true;
+  }
+  else if (PARTITIONS.size() > MAX_PARTITION) {
+    cerr << "ERROR: Request for " << PARTITIONS.size() << " partitions exceeds maximum allowed (" << WINSIZE << ").\n";
+    ERROR = true;
+  }
+  else {
+    DO_PARTITION = true;
+  }
+
+  for (int i = 0; i < PIK_CHOICE.size(); i++) {
+    if (PIK_CHOICE.size() > 1 && PIK_CHOICE[i] <= 0) {
+      cerr << "ERROR: When chosing one or more k for the k most frequent haplotypes,\n\
+      \tk must be > 0. Found k number " << i + 1 << " equal to " << PIK_CHOICE[i] << ".\n";
+      ERROR = true;
+    }
+  }
+
+  if (PIK_CHOICE.size() == 1 && PIK_CHOICE[0] <= 0) {
+    CALC_PIK = false;
+  }
+  else {
+    CALC_PIK = true;
+  }
+
+  
   if (ERROR) {
     return 1;
   }
@@ -214,9 +250,19 @@ int main(int argc, char *argv[])
   HaplotypeData *hapData;
   MapData *mapData;
   FreqData *freqData;
-
-  hapData = readHaplotypeDataTPED(tpedFilename);
-  mapData = readMapDataTPED(tpedFilename, hapData->nloci, hapData->nhaps);
+  if (TPED){
+    hapData = readHaplotypeDataTPED(tpedFilename);
+  }
+  else if (VCF){
+    hapData = readHaplotypeDataVCF(vcfFilename); 
+  }
+  if (NEED_GMAP){
+    mapData = readMapData(mapFilename, hapData->nloci);
+  }
+  else{//load physical positions
+    if(TPED) mapData = readMapDataTPED(tpedFilename, hapData->nloci, hapData->nhaps);
+    else if (VCF) mapData = readMapDataVCF(vcfFilename, hapData->nloci);
+  }
   freqData = initFreqData(hapData);
 
   if (SWEEPFINDER) {
@@ -227,7 +273,7 @@ int main(int argc, char *argv[])
     return 0;
   }
 
-  vector< pair_t* > *windows = findAllWindows(mapData, WINSIZE, WINSTEP);
+  vector< pair_t* > *windows = findAllWindows(mapData, WINSIZE, WINSTEP, USE_BP);
 
   int numStats = (CALC_PI +
                   CALC_PIK * PIK_CHOICE.size() +
@@ -263,6 +309,7 @@ int main(int argc, char *argv[])
     order->windows = windows;
     order->names = &names;
     order->DO_PARTITION = DO_PARTITION;
+    order->USE_BP = USE_BP;
     pthread_create(&(peer[i]),
                    NULL,
                    (void *(*)(void *))calc_stats,
@@ -277,11 +324,14 @@ int main(int argc, char *argv[])
   delete [] peer;
 
 
-  fout << "chr start end " << names << endl;
+  fout << "chr\tstart\tend\tnSNPs\t" << names << endl;
   for (int w = 0; w < windows->size(); w++) {
-    fout << mapData->chr << " " << windows->at(w)->winStart << " " << windows->at(w)->winStart + WINSIZE;
+    fout << mapData->chr << "\t" 
+      << windows->at(w)->winStart << "\t" 
+      << windows->at(w)->winStart + WINSIZE << "\t" 
+      << windows->at(w)->end - windows->at(w)->start + 1;
     for (int s = 0; s < numStats; s++) {
-      fout << " " << results[w][s];
+      fout << "\t" << results[w][s];
     }
     fout << endl;
   }

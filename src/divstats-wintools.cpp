@@ -1,27 +1,29 @@
 #include "divstats-wintools.h"
 
 
-vector< pair_t* > *findAllWindows(MapData *mapData, int WINSIZE, int WINSTEP) {
-	//int currWinStart = 0;//mapData->physicalPos[0];
-	//int currWinEnd = currWinStart + WINSIZE - 1;
-	int numSnps = mapData->nloci;
-	int endOfData = mapData->physicalPos[numSnps - 1];
-	pair_t *snpIndex = new pair_t;
-	snpIndex->start = 0;
-	snpIndex->end = -1;
-	int numInWindow;
-
+vector< pair_t* > *findAllWindows(MapData *mapData, int WINSIZE, int WINSTEP, bool USE_BP) {
 	vector< pair_t* > *windows = new vector< pair_t* >;
-	for (int currWinStart = 0; currWinStart < endOfData; currWinStart += WINSTEP/*, currWinEnd += WINSTEP*/) {
+	int numSnps = mapData->nloci;
+	if (USE_BP){
+		int endOfData = mapData->physicalPos[numSnps - 1];	
+		int snpIndexStart = 0;
 
-		//Find SNP index boundaries for the whole window
-		pair_t *snps = findInclusiveSNPIndicies(snpIndex->start, currWinStart, WINSIZE, mapData);
-		windows->push_back(snps);
-
-		snpIndex->start = snps->start;
-		snpIndex->end = snps->end;
+		for (int currWinStart = 0; currWinStart < endOfData; currWinStart += WINSTEP/*, currWinEnd += WINSTEP*/) {	
+			//Find SNP index boundaries for the whole window
+			pair_t *snps = findInclusiveSNPIndicies(snpIndexStart, currWinStart, WINSIZE, mapData);
+			windows->push_back(snps);
+			snpIndexStart = snps->start;
+		}
 	}
-
+	else{//USE_SITES
+		for (int i = 0; i < numSnps; i += WINSTEP){
+			pair_t* snps = new pair_t;
+			snps->start = i;
+			snps->end = (i+WINSIZE-1 >= numSnps) ? numSnps - 1 : i+WINSIZE-1;
+			snps->winStart = mapData->physicalPos[i];
+			windows->push_back(snps);
+		}
+	}
 	return windows;
 }
 
@@ -48,6 +50,7 @@ void calc_stats(void *order) {
 	vector<int> EHHK_CHOICES = params->getIntListFlag(ARG_EHHK);
 	vector<int> PARTITIONS = params->getIntListFlag(ARG_PARTITION);
 	bool DO_PARTITION = p->DO_PARTITION;
+	bool USE_BP = p->USE_BP;
 
 	int numThreads = params->getIntFlag(ARG_THREADS);
 	array_t *sfs, *partition_sfs;
@@ -94,7 +97,7 @@ void calc_stats(void *order) {
 				s++;
 			}
 			else if (STATS[j].compare(ARG_EHH) == 0 && EHH_WINS[0] != 0) {
-				vector< pair_t* > *ehh_windows = getEHHWindows(snps->start, snps->winStart, WINSIZE, EHH_WINS, mapData);
+				vector< pair_t* > *ehh_windows = getEHHWindows(snps->start, snps->winStart, WINSIZE, EHH_WINS, mapData, USE_BP);
 				for (int w = 0; w < ehh_windows->size(); w++) {
 					if (i == 0) (*names) += "ehh_" + int2str(EHH_WINS[w]) + " ";
 					hfs = hfs_window(hapData, ehh_windows->at(w));
@@ -105,7 +108,7 @@ void calc_stats(void *order) {
 				releaseAllWindows(ehh_windows);
 			}
 			else if (STATS[j].compare(ARG_EHHK) == 0 && EHHK_CHOICES[0] != 0) {
-				vector< pair_t* > *ehh_windows = getEHHWindows(snps->start, snps->winStart, WINSIZE, EHH_WINS, mapData);
+				vector< pair_t* > *ehh_windows = getEHHWindows(snps->start, snps->winStart, WINSIZE, EHH_WINS, mapData, USE_BP);
 				for (int w = 0; w < ehh_windows->size(); w++) {
 					hfs = hfs_window(hapData, ehh_windows->at(w));
 					for (int k = 0; k < EHHK_CHOICES.size(); k++) {
@@ -139,7 +142,7 @@ void calc_stats(void *order) {
 			char part[2];
 			part[0] = 'A';
 			part[1] = '\0';
-			vector< pair_t* > *partition_windows = getPartitionWindows(snps->start, snps->winStart, PARTITIONS, mapData);
+			vector< pair_t* > *partition_windows = getPartitionWindows(snps->start, snps->winStart, PARTITIONS, mapData, USE_BP);
 			for (int p = 0; p < partition_windows->size(); p++) {
 				int s_pi0 = MISSING;
 				int s_S0 = MISSING;
@@ -219,25 +222,63 @@ string int2str(int i) {
 	return string(buffer);
 }
 
-vector< pair_t* > *getPartitionWindows(int snpStart, int winStart, vector<int> &PARTITIONS, MapData *mapData) {
+vector< pair_t* > *getPartitionWindows(int snpStart, int winStart, vector<int> &PARTITIONS, MapData *mapData, bool USE_BP) {
 	vector< pair_t* > *partition_windows = new vector< pair_t* >;
-	int partitionSnpIndexStart = snpStart;
-	int partitionCurrWinStart = winStart;
-	for (int i = 0; i < PARTITIONS.size(); i++) {
-		pair_t *partition_snps = findInclusiveSNPIndicies(partitionSnpIndexStart, partitionCurrWinStart, PARTITIONS[i], mapData);
-		partition_windows->push_back(partition_snps);
-		partitionSnpIndexStart = partition_snps->end;
-		partitionCurrWinStart += PARTITIONS[i];
+	if (USE_BP){
+		int partitionSnpIndexStart = snpStart;
+		int partitionCurrWinStart = winStart;
+		for (int i = 0; i < PARTITIONS.size(); i++) {
+			pair_t *partition_snps = findInclusiveSNPIndicies(partitionSnpIndexStart, partitionCurrWinStart, PARTITIONS[i], mapData);
+			partition_windows->push_back(partition_snps);
+			partitionSnpIndexStart = partition_snps->end;
+			partitionCurrWinStart += PARTITIONS[i];
+		}
+	}
+	else{//USE_SITES
+		int numSnps = mapData->nloci;
+		int currStart = snpStart;
+		int currEnd = -1;
+		for (int i = 0; i < PARTITIONS.size(); i++){
+			pair_t *partition_snps = new pair_t;
+			currEnd = currStart + PARTITIONS[i] - 1;
+			partition_snps->start = currStart;
+			partition_snps->end = (currEnd >= numSnps) ? numSnps -1 : currEnd;
+			partition_windows->push_back(partition_snps);
+			currStart = currEnd + 1;
+		}
 	}
 	return partition_windows;
 }
 
-vector< pair_t* > *getEHHWindows(int snpStart, int winStart, int WINSIZE, vector<int> &EHH_WINS, MapData *mapData) {
+vector< pair_t* > *getEHHWindows(int snpStart, int winStart, int WINSIZE, vector<int> &EHH_WINS, MapData *mapData, bool USE_BP) {
 	vector< pair_t* > *ehh_windows = new vector< pair_t* >;
-	int currWinStart = winStart;
-	for (int i = 0; i < EHH_WINS.size(); i++) {
-		pair_t *snps = findInclusiveSNPIndicies(snpStart, ( winStart + (WINSIZE * 0.5) - (EHH_WINS[i] * 0.5) ) , EHH_WINS[i], mapData);
-		ehh_windows->push_back(snps);
+	if(USE_BP){
+		int currWinStart = winStart;
+		for (int i = 0; i < EHH_WINS.size(); i++) {
+			pair_t *snps = findInclusiveSNPIndicies(snpStart, ( winStart + (WINSIZE * 0.5) - (EHH_WINS[i] * 0.5) ) , EHH_WINS[i], mapData);
+			ehh_windows->push_back(snps);
+		}
+	}
+	else{//USE_SITES
+		double mid = (WINSIZE - 1) * 0.5 + snpStart;
+		for (int i = 0; i < EHH_WINS.size(); i++) {
+			pair_t *snps = new pair_t;
+			if (EHH_WINS[i] % 2 == 0){
+				snps->start = int(mid - (EHH_WINS[i] * 0.5) + 0.5);
+				snps->end = int(mid + (EHH_WINS[i] * 0.5));
+			}
+			else{
+				if (WINSIZE % 2 == 0){
+					snps->start = int(mid - (EHH_WINS[i] * 0.5) + 1);
+					snps->end = int(mid + (EHH_WINS[i] * 0.5) - 1);
+				}
+				else{
+					snps->start = int(mid - (EHH_WINS[i] * 0.5) + 0.5);
+					snps->end = int(mid + (EHH_WINS[i] * 0.5));
+				}
+			}
+			ehh_windows->push_back(snps);
+		}
 	}
 	return ehh_windows;
 }

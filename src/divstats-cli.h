@@ -15,6 +15,20 @@ const string DEFAULT_FILENAME_TPED = "__hapfile1";
 const string HELP_FILENAME_TPED = "A TPED file containing haplotype and map data.\n\
 \tVariants should be coded 0/1";
 
+const string ARG_FILENAME_POP1_VCF = "--vcf";
+const string DEFAULT_FILENAME_POP1_VCF = "__vcffile1";
+const string HELP_FILENAME_POP1_VCF = "A VCF file containing haplotype data.\n\
+\tVariants should be coded 0/1";
+
+const string ARG_FILENAME_MAP = "--map";
+const string DEFAULT_FILENAME_MAP = "__mapfile";
+const string HELP_FILENAME_MAP = "A mapfile with one row per variant site.\n\
+\tFormatted <chr#> <locusID> <genetic pos> <physical pos>.";
+
+const string ARG_PMAP = "--pmap";
+const bool DEFAULT_PMAP = false;
+const string HELP_PMAP = "Use physical map instead of a genetic map.";
+
 const string ARG_OUTFILE = "--out";
 const string DEFAULT_OUTFILE = "outfile";
 const string HELP_OUTFILE = "The basename for all output files.";
@@ -24,12 +38,20 @@ const bool DEFAULT_2_SWEEPFINDER = false;
 const string HELP_2_SWEEPFINDER = "Output in SweepFinder format.";
 
 // Window control flags
+const string ARG_BP = "--bp";
+const bool DEFAULT_BP = false;
+const string HELP_BP = "Use bps for window sizes.";
+
+const string ARG_SITES = "--sites";
+const bool DEFAULT_SITES = false;
+const string HELP_SITES = "Use sites for window sizes.";
+
 const string ARG_WINSIZE = "--winsize";
-const int DEFAULT_WINSIZE = 100000;
+const int DEFAULT_WINSIZE = 0;
 const string HELP_WINSIZE = "The window size within which to calculate diversity statistics.";
 
 const string ARG_WINSTEP = "--winstep";
-const int DEFAULT_WINSTEP = 100000;
+const int DEFAULT_WINSTEP = 0;
 const string HELP_WINSTEP = "The sliding window step size.";
 
 const string ARG_PARTITION = "--partition";
@@ -62,8 +84,7 @@ const string ARG_EHH = "--ehh";
 const int DEFAULT_EHH = 0;
 const string HELP_EHH = "A list of window sizes within which to calculate EHH.\n\
 \tThese subwindows will be centered on the middle of the current\n\
-\twindow and may not be larger than --winsize. Set to 0 to simply\n\
-\tcalculate within the entire window.";
+\twindow and may not be larger than --winsize.\n";
 
 const string ARG_EHHK = "--ehhk";
 const int DEFAULT_EHHK = 0;

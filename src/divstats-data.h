@@ -93,6 +93,7 @@ void releaseFreqData(FreqData *data);
 //throws an exception otherwise
 MapData *readMapData(string filename, int expected_loci);
 MapData *readMapDataTPED(string filename, int expected_loci, int expected_haps);
+MapData *readMapDataVCF(string filename, int expected_loci); //Physical positions only
 
 //allocates the 2-d array and populated it with -9
 HaplotypeData *initHaplotypeData(unsigned int nhaps, unsigned int nloci);
@@ -103,6 +104,7 @@ void releaseHapData(HaplotypeData *data);
 //throws an exception otherwise
 HaplotypeData *readHaplotypeData(string filename);
 HaplotypeData *readHaplotypeDataTPED(string filename);
+HaplotypeData *readHaplotypeDataVCF(string filename);
 
 //counts the number of "fields" in a string
 //where a field is defined as a contiguous set of non whitespace
