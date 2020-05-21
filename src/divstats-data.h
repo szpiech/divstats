@@ -28,6 +28,9 @@ using namespace std;
 
 const double MISSING = -999;
 const char MISSING_CHAR = '9';
+const char MISSING_ALLELE = '-';
+const string TPED_MISSING = "-9";
+const char VCF_MISSING = '.';
 
 struct HaplotypeData
 {
@@ -48,13 +51,14 @@ struct MapData
 struct FreqData
 {
   int *count;
+  int *nmissing;
   int nloci;
   int nhaps;
 };
 
 struct array_t
 {
-  int *data;
+  double *data;
   int size;
 };
 
@@ -76,7 +80,7 @@ struct pair_t //guess it's a triplet...
 HaplotypeFrequencySpectrum *initHaplotypeFrequencySpectrum();
 void releaseHaplotypeFrequencySpectrum(HaplotypeFrequencySpectrum *data);
 
-array_t *initArray(int size, int fill = 0);
+array_t *initArray(int size, double fill = 0);
 void releaseArray(array_t* data);
 
 //allocates the arrays and populates them with -9 or "--" depending on type

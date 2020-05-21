@@ -39,7 +39,7 @@ int main(int argc, char *argv[])
   params.addFlag(ARG_OUTFILE, DEFAULT_OUTFILE, "", HELP_OUTFILE);
   params.addFlag(ARG_FILENAME_POP1_VCF, DEFAULT_FILENAME_POP1_VCF, "", HELP_FILENAME_POP1_VCF);
   params.addFlag(ARG_FILENAME_MAP, DEFAULT_FILENAME_MAP, "", HELP_FILENAME_MAP);
-  params.addFlag(ARG_PMAP, DEFAULT_PMAP, "", HELP_PMAP);
+  
     
   // Window control flags
   params.addFlag(ARG_BP, DEFAULT_BP, "", HELP_BP);
@@ -59,8 +59,10 @@ int main(int argc, char *argv[])
 
   // Other flags
   params.addFlag(ARG_EHH_PART, DEFAULT_EHH_PART, "", HELP_EHH_PART);
+  params.addFlag(ARG_NO_SFS_SUB, DEFAULT_NO_SFS_SUB, "", HELP_NO_SFS_SUB);
   params.addFlag(ARG_2_SWEEPFINDER, DEFAULT_2_SWEEPFINDER, "SILENT", HELP_2_SWEEPFINDER);
-
+  params.addFlag(ARG_PMAP, DEFAULT_PMAP, "", HELP_PMAP);
+  
   try {
     params.parseCommandLine(argc, argv);
   }
@@ -103,6 +105,7 @@ int main(int argc, char *argv[])
   bool SWEEPFINDER = params.getBoolFlag(ARG_2_SWEEPFINDER);
   bool EHH_PART = params.getBoolFlag(ARG_EHH_PART);
   bool PMAP = params.getBoolFlag(ARG_PMAP);
+  bool SFS_SUB = !(params.getBoolFlag(ARG_NO_SFS_SUB));
 
   // Check for consistency errors within flags
   bool ERROR = false;
@@ -310,6 +313,7 @@ int main(int argc, char *argv[])
     order->names = &names;
     order->DO_PARTITION = DO_PARTITION;
     order->USE_BP = USE_BP;
+    order->SFS_SUB = SFS_SUB;
     pthread_create(&(peer[i]),
                    NULL,
                    (void *(*)(void *))calc_stats,

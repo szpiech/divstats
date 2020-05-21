@@ -38,10 +38,10 @@ void releaseHaplotypeFrequencySpectrum(HaplotypeFrequencySpectrum *hfs){
     return;
 }
 
-array_t *initArray(int size, int fill){
+array_t *initArray(int size, double fill){
     array_t *data = new array_t;
     data->size = size;
-    data->data = new int[size];
+    data->data = new double[size];
     for(int i = 0; i < size; i++){
         data->data[i] = fill;
     }
@@ -62,6 +62,7 @@ void releaseArray(array_t* data){
 FreqData *initFreqData(int nhaps, int nloci) {
     FreqData *freqData = new FreqData;
     freqData->count = new int[nloci];
+    freqData->nmissing = new int[nloci];
     for (int i = 0; i < nloci; i++) {
         freqData->count[i] = MISSING;
     }
@@ -83,7 +84,8 @@ FreqData *initFreqData(HaplotypeData* data) {
         for (int hap = 0; hap < data->nhaps; hap++)
         {
             freqData->count[locus] += ( data->data[hap][locus] == '1' ? 1 : 0 );
-            if (data->data[hap][locus] != '0' && data->data[hap][locus] != '1')
+            freqData->nmissing[locus] += ( data->data[hap][locus] == MISSING_ALLELE ? 1 : 0 );
+            if (data->data[hap][locus] != '0' && data->data[hap][locus] != '1' && data->data[hap][locus] != MISSING_ALLELE)
             {
                 cerr << "ERROR:  Alleles must be coded 0/1 only.\n";
                 throw 0;
@@ -100,6 +102,9 @@ void releaseFreqData(FreqData *data){
     }
     if(data->count != NULL){
         delete [] data->count;
+    }
+    if(data->nmissing != NULL){
+        delete [] data->nmissing;
     }
     delete data;
     return;
@@ -471,7 +476,7 @@ HaplotypeData *readHaplotypeDataTPED(string filename)
     HaplotypeData *data = initHaplotypeData(current_nhaps - numMapCols, nloci);
 
     string junk;
-
+    string allele;
     for (int locus = 0; locus < data->nloci; locus++)
     {
         for (int i = 0; i < numMapCols; i++)
@@ -480,12 +485,14 @@ HaplotypeData *readHaplotypeDataTPED(string filename)
         }
         for (int hap = 0; hap < data->nhaps; hap++)
         {
-            fin >> data->data[hap][locus];
-            if (data->data[hap][locus] != '0' && data->data[hap][locus] != '1')
+            fin >> allele;
+            if (allele.compare("0") != 0 && allele.compare("1") != 0 && allele.compare(TPED_MISSING) != 0)
             {
                 cerr << "ERROR:  Alleles must be coded 0/1 only.\n";
                 throw 0;
             }
+            if (allele.compare(TPED_MISSING) == 0) data->data[hap][locus] = MISSING_ALLELE;
+            else data->data[hap][locus] = allele[0];
         }
     }
 
@@ -579,19 +586,17 @@ HaplotypeData *readHaplotypeDataVCF(string filename)
             allele1 = junk[0];
             separator = junk[1];
             allele2 = junk[2];
-            if ( (allele1 != '0' && allele1 != '1') || (allele2 != '0' && allele2 != '1') )
+            if ( (allele1 != '0' && allele1 != '1' && allele1 != VCF_MISSING) || (allele2 != '0' && allele2 != '1' && allele2 != VCF_MISSING) )
             {
                 cerr << "ERROR: Alleles must be coded 0/1 only.\n";
                 cerr << allele1 << " " << allele2 << endl;
                 throw 0;
             }
 
-            //if(separator != '|'){
-            //    cerr << "ERROR:  Alleles must be coded 0/1 only.\n";
-            //    throw 0;
-            //}
-            data->data[2 * field][locus] = allele1;
-            data->data[2 * field + 1][locus] = allele2;
+            if (allele1 == VCF_MISSING) data->data[2 * field][locus] = MISSING_ALLELE;
+            else data->data[2 * field][locus] = allele1;
+            if (allele2 == VCF_MISSING) data->data[2 * field + 1][locus] = MISSING_ALLELE;
+            else data->data[2 * field + 1][locus] = allele2;
         }
     }
 
@@ -599,6 +604,7 @@ HaplotypeData *readHaplotypeDataVCF(string filename)
 
     return data;
 }
+
 
 HaplotypeData *initHaplotypeData(unsigned int nhaps, unsigned int nloci)
 {

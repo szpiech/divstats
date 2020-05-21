@@ -25,10 +25,6 @@ const string DEFAULT_FILENAME_MAP = "__mapfile";
 const string HELP_FILENAME_MAP = "A mapfile with one row per variant site.\n\
 \tFormatted <chr#> <locusID> <genetic pos> <physical pos>.";
 
-const string ARG_PMAP = "--pmap";
-const bool DEFAULT_PMAP = false;
-const string HELP_PMAP = "Use physical map instead of a genetic map.";
-
 const string ARG_OUTFILE = "--out";
 const string DEFAULT_OUTFILE = "outfile";
 const string HELP_OUTFILE = "The basename for all output files.";
@@ -107,6 +103,17 @@ const bool DEFAULT_EHH_PART = false;
 const string HELP_EHH_PART = "Calculates EHH/EHHK in any partitions of the main window.\n\
 \tTo be distinguished from --ehh, which calculates EHH in sub-windows\n\
 \tcentered on the main window.  Requires --ehh/--ehhk to be set.";
+
+const string ARG_NO_SFS_SUB = "--no-sfs-sub";
+const bool DEFAULT_NO_SFS_SUB = false;
+const string HELP_NO_SFS_SUB = "Do not subsample the SFS to handle missing data.\n\
+\tEffectively treats missing data as 0/0 in the SFS. Can speed up computation of\n\
+sfs-based statistics substantially.";
+
+const string ARG_PMAP = "--pmap";
+const bool DEFAULT_PMAP = false;
+const string HELP_PMAP = "Use physical map instead of a genetic map.";
+
 
 #define NOPTS 7
 

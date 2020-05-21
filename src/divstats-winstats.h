@@ -21,6 +21,7 @@
 
 #include "divstats-data.h"
 #include <map>
+#include <vector>
 #include <cstdlib>
 #include "binom.h"
 #include <gsl/gsl_combination.h>
@@ -28,7 +29,8 @@
 int compare (const void *a, const void *b);
 int *uniqInt(int *array, int size, int &newSize);
 
-array_t *sfs_window(FreqData *freqData, pair_t* snpIndex);
+double subsample_sfs(array_t *sfs, int H, int j);
+array_t *sfs_window(FreqData *freqData, pair_t* snpIndex, bool SFS_SUB);
 HaplotypeFrequencySpectrum *hfs_window(HaplotypeData *hapData, pair_t* snpIndex);
 
 double pi_window(HaplotypeData *hapData, pair_t* snpIndex);

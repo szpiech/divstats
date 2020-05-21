@@ -27,6 +27,7 @@ struct work_order_t
 
     bool DO_PARTITION;
     bool USE_BP;
+    bool SFS_SUB;
 };
 
 pair_t* findInclusiveSNPIndicies(int startSnpIndex, int currWinStart, int WINSIZE, MapData* mapData);

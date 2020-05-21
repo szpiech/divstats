@@ -351,11 +351,16 @@ HaplotypeFrequencySpectrum *hfs_window(HaplotypeData * hapData, pair_t* snpIndex
 
    HaplotypeFrequencySpectrum *hfs = initHaplotypeFrequencySpectrum();
 
+   bool skip = false;
    //Generate haplotypes and populate hap2count
    for (int hap = 0; hap < hapData->nhaps; hap++) {
       string haplotype;
 
       for (int site = snpIndex->start; site <= snpIndex->end; site++) {
+         if (hapData->data[hap][site] == MISSING_ALLELE){
+            skip = true;
+            break;
+         }
          if (site == snpIndex->start) {
             //haplotypeList[hap] = data[hap][site];
             haplotype = hapData->data[hap][site];
@@ -365,14 +370,20 @@ HaplotypeFrequencySpectrum *hfs_window(HaplotypeData * hapData, pair_t* snpIndex
             haplotype += hapData->data[hap][site];
          }
       }
-
-      if (hfs->hap2count.count(haplotype) == 0) {
-         hfs->hap2count[haplotype] = 1;
+      if (!skip){
+         if (hfs->hap2count.count(haplotype) == 0) {
+            hfs->hap2count[haplotype] = 1;
+         }
+         else {
+            hfs->hap2count[haplotype]++;
+         }
       }
-      else {
-         hfs->hap2count[haplotype]++;
+      else{
+         skip = false;
       }
    }
+
+   if(hfs->hap2count.size() == 0) return NULL;
 
    //Populate count2hap and sortedCounts
    int *sortedCount = new int[hfs->hap2count.size()]; //could contain duplicates
@@ -436,6 +447,69 @@ double pi_window(HaplotypeData * hapData, pair_t* snpIndex) {
    return (pi / denominator);
 }
 
+double subsample_sfs(array_t *sfs, int H, int j){
+   double res = 0;
+   int n = sfs->size;
+   for (int i = j; i < n-1; i++){
+      res += sfs->data[i] * nCk(i,j)*nCk(n-i,H-j)/nCk(n,H);
+   }
+   return res;
+}
+
+array_t *sfs_window(FreqData * freqData, pair_t* snpIndex, bool SFS_SUB) {
+   if (numSitesInDataWin(snpIndex) <= 0) return NULL;
+   int nTargetHaps = freqData->nhaps;
+   vector<int> nhaps;
+   int n;
+   if(SFS_SUB){
+      for (int i = snpIndex->start; i <= snpIndex->end; i++){
+         n = freqData->nhaps - freqData->nmissing[i];
+         nhaps.push_back(n);
+         if (nTargetHaps > n){
+            nTargetHaps = n;
+         }
+      }
+   }
+
+   array_t *sfs = initArray(nTargetHaps + 1);
+   
+   if (nTargetHaps != freqData->nhaps){
+      array_t *s;
+      map<int,array_t*> multiSFS;
+      int j;
+      for (int i = 0; i < nhaps.size(); i++){
+         n = nhaps[i];
+         j = i + snpIndex->start;
+         if (multiSFS.count(n) == 0) multiSFS[n] = initArray(n + 1);
+         multiSFS[n]->data[freqData->count[j]]++;
+      }
+      map<int,array_t*>::iterator it;
+      for (it = multiSFS.begin(); it != multiSFS.end(); it++){
+         n = it->first;
+         s = it->second;
+         if(n == nTargetHaps){
+            for (int i = 0; i < sfs->size; i++){
+               sfs->data[i] += s->data[i];
+            }
+         }
+         else{
+            for (int i = 0; i < sfs->size; i++){
+               sfs->data[i] += subsample_sfs(s,nTargetHaps,i);
+            }
+         }
+         releaseArray(s);
+      }
+   }
+   else{
+      for (int i = snpIndex->start; i <= snpIndex->end; i++) {
+         sfs->data[freqData->count[i]]++;
+      }
+   }
+
+   return sfs;
+}
+
+/*
 array_t *sfs_window(FreqData * freqData, pair_t* snpIndex) {
    if (numSitesInDataWin(snpIndex) <= 0) return NULL;
    array_t *sfs = initArray(freqData->nhaps + 1);
@@ -446,6 +520,7 @@ array_t *sfs_window(FreqData * freqData, pair_t* snpIndex) {
 
    return sfs;
 }
+*/
 
 double pi_from_sfs(array_t *sfs) {
    if (sfs == NULL) return MISSING;
