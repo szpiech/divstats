@@ -306,6 +306,7 @@ pair_t* findInclusiveSNPIndicies(int startSnpIndex, int currWinStart, int WINSIZ
 	}
 	while (mapData->physicalPos[endSnpIndex] < currWinEnd) {
 		endSnpIndex++;
+		if (endSnpIndex >= numSnps - 1) break;
 	}
 	endSnpIndex--;
 	endSnpIndex = (endSnpIndex >= numSnps) ? numSnps - 1 : endSnpIndex;
