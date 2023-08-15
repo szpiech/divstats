@@ -39,7 +39,7 @@ int main(int argc, char *argv[])
   params.addFlag(ARG_OUTFILE, DEFAULT_OUTFILE, "", HELP_OUTFILE);
   params.addFlag(ARG_FILENAME_POP1_VCF, DEFAULT_FILENAME_POP1_VCF, "", HELP_FILENAME_POP1_VCF);
   params.addFlag(ARG_FILENAME_MAP, DEFAULT_FILENAME_MAP, "", HELP_FILENAME_MAP);
-  
+  params.addFlag(ARG_HEMI, DEFAULT_HEMI, "", HELP_HEMI);
     
   // Window control flags
   params.addFlag(ARG_BP, DEFAULT_BP, "", HELP_BP);
@@ -80,6 +80,7 @@ int main(int argc, char *argv[])
   string mapFilename = params.getStringFlag(ARG_FILENAME_MAP);
   bool MAP = (mapFilename.compare(DEFAULT_FILENAME_MAP) == 0) ? false : true;
   string outfileBase = params.getStringFlag(ARG_OUTFILE);
+  bool HEMI = params.getBoolFlag(ARG_HEMI);
 
   // Window control
   bool USE_BP = params.getBoolFlag(ARG_BP);
@@ -257,7 +258,7 @@ int main(int argc, char *argv[])
     hapData = readHaplotypeDataTPED(tpedFilename);
   }
   else if (VCF){
-    hapData = readHaplotypeDataVCF(vcfFilename); 
+    hapData = readHaplotypeDataVCF(vcfFilename,HEMI); 
   }
   if (NEED_GMAP){
     mapData = readMapData(mapFilename, hapData->nloci);

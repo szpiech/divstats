@@ -501,7 +501,7 @@ HaplotypeData *readHaplotypeDataTPED(string filename)
     return data;
 }
 
-HaplotypeData *readHaplotypeDataVCF(string filename)
+HaplotypeData *readHaplotypeDataVCF(string filename, bool HEMI)
 {
     igzstream fin;
     cerr << "Opening " << filename << "...\n";
@@ -556,7 +556,8 @@ HaplotypeData *readHaplotypeDataVCF(string filename)
         throw 0;
     }
 
-    int nhaps = (current_nhaps - numMapCols) * 2;
+    int nhaps = (current_nhaps - numMapCols);
+    if(!HEMI) nhaps *= 2;
     int nfields = (current_nhaps - numMapCols);
     cerr << "Loading " << nhaps << " haplotypes and " << nloci << " loci...\n";
 
@@ -584,19 +585,32 @@ HaplotypeData *readHaplotypeDataVCF(string filename)
         {
             fin >> junk;
             allele1 = junk[0];
-            separator = junk[1];
-            allele2 = junk[2];
-            if ( (allele1 != '0' && allele1 != '1' && allele1 != VCF_MISSING) || (allele2 != '0' && allele2 != '1' && allele2 != VCF_MISSING) )
-            {
-                cerr << "ERROR: Alleles must be coded 0/1 only.\n";
-                cerr << allele1 << " " << allele2 << endl;
+            if(!HEMI){
+                separator = junk[1];
+                allele2 = junk[2];
+            
+                if ( (allele1 != '0' && allele1 != '1' && allele1 != VCF_MISSING) || (allele2 != '0' && allele2 != '1' && allele2 != VCF_MISSING) ){
+                    cerr << "ERROR: Alleles must be coded 0/1 or missing only.\n";
+                    cerr << allele1 << " " << allele2 << endl;
+                    throw 0;
+                }
+            }
+            else if (allele1 != '0' && allele1 != '1' && allele1 != VCF_MISSING){
+                cerr << "ERROR: Allele must be coded 0/1 or missing only.\n";
+                cerr << allele1 << endl;
                 throw 0;
             }
 
-            if (allele1 == VCF_MISSING) data->data[2 * field][locus] = MISSING_ALLELE;
-            else data->data[2 * field][locus] = allele1;
-            if (allele2 == VCF_MISSING) data->data[2 * field + 1][locus] = MISSING_ALLELE;
-            else data->data[2 * field + 1][locus] = allele2;
+            if (!HEMI){
+                if (allele1 == VCF_MISSING) data->data[2 * field][locus] = MISSING_ALLELE;
+                else data->data[2 * field][locus] = allele1;
+                if (allele2 == VCF_MISSING) data->data[2 * field + 1][locus] = MISSING_ALLELE;
+                else data->data[2 * field + 1][locus] = allele2;
+            }
+            else{
+                if (allele1 == VCF_MISSING) data->data[field][locus] = MISSING_ALLELE;
+                else data->data[field][locus] = allele1;
+            }
         }
     }
 

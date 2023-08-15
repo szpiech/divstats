@@ -25,6 +25,10 @@ const string DEFAULT_FILENAME_MAP = "__mapfile";
 const string HELP_FILENAME_MAP = "A mapfile with one row per variant site.\n\
 \tFormatted <chr#> <locusID> <genetic pos> <physical pos>.";
 
+const string ARG_HEMI = "--hemi";
+const bool DEFAULT_HEMI = false;
+const string HELP_HEMI = "Input data is hemizygous (e.g. chrY).";
+
 const string ARG_OUTFILE = "--out";
 const string DEFAULT_OUTFILE = "outfile";
 const string HELP_OUTFILE = "The basename for all output files.";

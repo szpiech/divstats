@@ -108,7 +108,7 @@ void releaseHapData(HaplotypeData *data);
 //throws an exception otherwise
 HaplotypeData *readHaplotypeData(string filename);
 HaplotypeData *readHaplotypeDataTPED(string filename);
-HaplotypeData *readHaplotypeDataVCF(string filename);
+HaplotypeData *readHaplotypeDataVCF(string filename, bool HEMI);
 
 //counts the number of "fields" in a string
 //where a field is defined as a contiguous set of non whitespace
