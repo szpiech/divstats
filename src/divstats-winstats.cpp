@@ -459,6 +459,7 @@ double subsample_sfs(array_t *sfs, int H, int j){
 array_t *sfs_window(FreqData * freqData, pair_t* snpIndex, bool SFS_SUB) {
    if (numSitesInDataWin(snpIndex) <= 0) return NULL;
    int nTargetHaps = freqData->nhaps;
+   //cerr << "Calculating sfs across " << freqData->nhaps << " haps.\n";
    vector<int> nhaps;
    int n;
    if(SFS_SUB){

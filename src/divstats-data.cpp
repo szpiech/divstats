@@ -77,10 +77,12 @@ FreqData *initFreqData(HaplotypeData* data) {
         throw 0;
     }
     FreqData *freqData = initFreqData(data->nhaps,data->nloci);
+    //cerr << "Calculating frequencies on " << data->nhaps << " haps across " << data->nloci << " loci.\n";
 
     for (int locus = 0; locus < data->nloci; locus++)
     {
         freqData->count[locus] = 0;
+        freqData->nmissing[locus] = 0;
         for (int hap = 0; hap < data->nhaps; hap++)
         {
             freqData->count[locus] += ( data->data[hap][locus] == '1' ? 1 : 0 );
