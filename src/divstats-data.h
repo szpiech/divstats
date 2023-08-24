@@ -70,11 +70,12 @@ struct HaplotypeFrequencySpectrum {
   int numUniq;
 };
 
-struct pair_t //guess it's a triplet...
+struct pair_t //guess it's a quartet...
 {
   int start;
   int end;
   int winStart;
+  int winEnd;
 };
 
 HaplotypeFrequencySpectrum *initHaplotypeFrequencySpectrum();

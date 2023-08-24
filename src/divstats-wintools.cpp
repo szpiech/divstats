@@ -9,6 +9,7 @@ vector< pair_t* > *findAllWindows(MapData *mapData, int WINSIZE, int WINSTEP, bo
 		int snpIndexStart = 0;
 
 		for (int currWinStart = 0; currWinStart < endOfData; currWinStart += WINSTEP/*, currWinEnd += WINSTEP*/) {	
+			if(currWinStart+WINSIZE-1 >= endOfData) break;
 			//Find SNP index boundaries for the whole window
 			pair_t *snps = findInclusiveSNPIndicies(snpIndexStart, currWinStart, WINSIZE, mapData);
 			windows->push_back(snps);
@@ -17,10 +18,12 @@ vector< pair_t* > *findAllWindows(MapData *mapData, int WINSIZE, int WINSTEP, bo
 	}
 	else{//USE_SITES
 		for (int i = 0; i < numSnps; i += WINSTEP){
+			if (i+WINSIZE-1 >= numSnps-1) break;
 			pair_t* snps = new pair_t;
 			snps->start = i;
-			snps->end = (i+WINSIZE-1 >= numSnps) ? numSnps - 1 : i+WINSIZE-1;
+			snps->end = i+WINSIZE-1;
 			snps->winStart = mapData->physicalPos[i];
+			snps->winEnd = mapData->physicalPos[i+WINSIZE-1];
 			windows->push_back(snps);
 		}
 	}
@@ -295,6 +298,7 @@ pair_t* findInclusiveSNPIndicies(int startSnpIndex, int currWinStart, int WINSIZ
 
 	pair_t* snps = new pair_t;
 	snps->winStart = currWinStart;
+	snps->winEnd = currWinEnd;
 	if (mapData->physicalPos[numSnps - 1] < currWinStart) {
 		snps->start = numSnps;
 		snps->end = numSnps - 1;

@@ -329,11 +329,12 @@ int main(int argc, char *argv[])
   delete [] peer;
 
 
-  fout << "chr\tstart\tend\tnSNPs\t" << names << endl;
+  fout << "chr\tstart\tend\tnbps\tnSNPs\t" << names << endl;
   for (int w = 0; w < windows->size(); w++) {
     fout << mapData->chr << "\t" 
       << windows->at(w)->winStart << "\t" 
-      << windows->at(w)->winStart + WINSIZE << "\t" 
+      << windows->at(w)->winEnd << "\t"
+      << windows->at(w)->winEnd - windows->at(w)->winStart + 1 << "\t"
       << windows->at(w)->end - windows->at(w)->start + 1;
     for (int s = 0; s < numStats; s++) {
       fout << "\t" << results[w][s];
