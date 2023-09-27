@@ -572,7 +572,7 @@ double tajimaD_from_sfs(array_t *sfs, double pi, double S) {
    e1 = calc_e1(n, a1);
    e2 = calc_e2(n, a1, a2);
 
-   denominator = e1 * S + e2 * S * (S - 1);
+   denominator = sqrt(e1 * S + e2 * S * (S - 1));
 
    return (pi - S / a1) / denominator;
 }
