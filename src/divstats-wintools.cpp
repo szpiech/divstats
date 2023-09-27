@@ -18,7 +18,7 @@ vector< pair_t* > *findAllWindows(MapData *mapData, int WINSIZE, int WINSTEP, bo
 	}
 	else{//USE_SITES
 		for (int i = 0; i < numSnps; i += WINSTEP){
-			if (i+WINSIZE-1 >= numSnps-1) break;
+			if (i+WINSIZE-1 >= numSnps) break;
 			pair_t* snps = new pair_t;
 			snps->start = i;
 			snps->end = i+WINSIZE-1;
