@@ -58,9 +58,12 @@ void calc_stats(void *order) {
 	bool CONST_N = params->getBoolFlag(ARG_CONST_N_SUB);
 
 	int numThreads = params->getIntFlag(ARG_THREADS);
-	array_t *sfs, *partition_sfs;
-	HaplotypeFrequencySpectrum *hfs, *partition_hfs, *pik_hfs;
-	pair_t *snps, *partition_snps;
+	//These must be initialized: each is assigned only inside a conditional
+	//branch below but released unconditionally at the end of every window
+	//iteration, so leaving them indeterminate frees a garbage pointer.
+	array_t *sfs = NULL, *partition_sfs = NULL;
+	HaplotypeFrequencySpectrum *hfs = NULL, *partition_hfs = NULL, *pik_hfs = NULL;
+	pair_t *snps = NULL, *partition_snps = NULL;
 
 
 	bool NEED_SFS = false;
@@ -75,7 +78,13 @@ void calc_stats(void *order) {
 	//Cycle over all windows and calculate stats
 	for (int i = id; i < windows->size(); i += numThreads) {
 		snps = windows->at(i);
-		
+
+		//Reset per-window: whatever the previous iteration allocated has
+		//already been released, so these must not be carried over.
+		sfs = NULL;
+		pik_hfs = NULL;
+		partition_sfs = NULL;
+
 		if (NEED_SFS) sfs = sfs_window(freqData, snps, SFS_SUB, CONST_N);
 
 		int s = 0;
@@ -155,6 +164,7 @@ void calc_stats(void *order) {
 				int s_S0 = MISSING;
 				string partStr(part);
 				partition_snps = partition_windows->at(p);
+				partition_sfs = NULL;
 				if (NEED_SFS) partition_sfs = sfs_window(freqData, partition_snps, SFS_SUB, CONST_N);
 
 				for (int j = 0; j < NOPTS; j++) {
