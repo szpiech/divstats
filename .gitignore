@@ -4,3 +4,5 @@
 test.*
 sample.*
 .DS_Store
+divstats
+*.divstats.out

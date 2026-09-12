@@ -58,5 +58,10 @@ param_t.o : param_t.cpp
 gzstream.o : gzstream.cpp
 	$(CC) $(G++FLAG) -c gzstream.cpp $(I_PATH)
 
+#Golden-file regression suite. Compares this build's output against the
+#tables in tests/expected/ column by column. See tests/run_tests.sh.
+check : divstats
+	../tests/run_tests.sh
+
 clean :
 	rm *.o
