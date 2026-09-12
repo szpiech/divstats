@@ -30,7 +30,7 @@ int compare (const void *a, const void *b);
 int *uniqInt(int *array, int size, int &newSize);
 
 double subsample_sfs(array_t *sfs, int H, int j);
-array_t *sfs_window(FreqData *freqData, pair_t* snpIndex, bool SFS_SUB);
+array_t *sfs_window(FreqData *freqData, pair_t* snpIndex, bool SFS_SUB, bool CONST_N);
 HaplotypeFrequencySpectrum *hfs_window(HaplotypeData *hapData, pair_t* snpIndex);
 
 double pi_window(HaplotypeData *hapData, pair_t* snpIndex);

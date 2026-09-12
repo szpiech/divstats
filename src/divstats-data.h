@@ -52,6 +52,7 @@ struct FreqData
 {
   int *count;
   int *nmissing;
+  int maxMissing;
   int nloci;
   int nhaps;
 };

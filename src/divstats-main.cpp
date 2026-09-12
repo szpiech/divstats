@@ -60,6 +60,7 @@ int main(int argc, char *argv[])
   // Other flags
   params.addFlag(ARG_EHH_PART, DEFAULT_EHH_PART, "", HELP_EHH_PART);
   params.addFlag(ARG_NO_SFS_SUB, DEFAULT_NO_SFS_SUB, "", HELP_NO_SFS_SUB);
+  params.addFlag(ARG_CONST_N_SUB, DEFAULT_CONST_N_SUB, "", HELP_CONST_N_SUB);
   params.addFlag(ARG_2_SWEEPFINDER, DEFAULT_2_SWEEPFINDER, "SILENT", HELP_2_SWEEPFINDER);
   params.addFlag(ARG_PMAP, DEFAULT_PMAP, "", HELP_PMAP);
   

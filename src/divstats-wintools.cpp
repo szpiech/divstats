@@ -55,6 +55,7 @@ void calc_stats(void *order) {
 	bool DO_PARTITION = p->DO_PARTITION;
 	bool USE_BP = p->USE_BP;
 	bool SFS_SUB = p->SFS_SUB;
+	bool CONST_N = params->getBoolFlag(ARG_CONST_N_SUB);
 
 	int numThreads = params->getIntFlag(ARG_THREADS);
 	array_t *sfs, *partition_sfs;
@@ -75,7 +76,7 @@ void calc_stats(void *order) {
 	for (int i = id; i < windows->size(); i += numThreads) {
 		snps = windows->at(i);
 		
-		if (NEED_SFS) sfs = sfs_window(freqData, snps, SFS_SUB);
+		if (NEED_SFS) sfs = sfs_window(freqData, snps, SFS_SUB, CONST_N);
 
 		int s = 0;
 		int s_pi = MISSING; //note storage location of pi if it exists
@@ -154,7 +155,7 @@ void calc_stats(void *order) {
 				int s_S0 = MISSING;
 				string partStr(part);
 				partition_snps = partition_windows->at(p);
-				if (NEED_SFS) partition_sfs = sfs_window(freqData, partition_snps, SFS_SUB);
+				if (NEED_SFS) partition_sfs = sfs_window(freqData, partition_snps, SFS_SUB, CONST_N);
 
 				for (int j = 0; j < NOPTS; j++) {
 					if (STATS[j].compare(ARG_PI) == 0 && params->getBoolFlag(ARG_PI)) {

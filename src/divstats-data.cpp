@@ -68,6 +68,7 @@ FreqData *initFreqData(int nhaps, int nloci) {
     }
     freqData->nloci = nloci;
     freqData->nhaps = nhaps;
+    freqData->maxMissing = -1;
     return freqData;
 }
 
@@ -93,6 +94,7 @@ FreqData *initFreqData(HaplotypeData* data) {
                 throw 0;
             }
         }
+        if (freqData->maxMissing < freqData->nmissing[locus]) freqData->maxMissing = freqData->nmissing[locus];
     }
 
     return freqData;

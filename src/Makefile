@@ -12,7 +12,8 @@ G++FLAG = -O3 -m64 -mmmx -msse -msse2
 LINK_OPTS2 = -lz -pthread
 #-lgsl -lgslcblas
 I_PATH = -I../include
-L_PATH = ../lib/osx
+#L_PATH = ../lib/osx
+L_PATH = ../lib/macos-arm
 
 #for linux systems
 #CC = g++

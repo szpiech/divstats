@@ -114,6 +114,12 @@ const string HELP_NO_SFS_SUB = "Do not subsample the SFS to handle missing data.
 \tEffectively treats missing data as 0/0 in the SFS. Can speed up computation of\n\
 sfs-based statistics substantially.";
 
+const string ARG_CONST_N_SUB = "--const-n-sub";
+const bool DEFAULT_CONST_N_SUB = false;
+const string HELP_CONST_N_SUB = "For SFS subsampling, use a constant samplesize (n) equal to the\n\
+\tsample size at the locus with the most missing data for all windows. Without this flag, windows\n\
+\tmay have different sample sizes based on the amount of missing data within each window.";
+
 const string ARG_PMAP = "--pmap";
 const bool DEFAULT_PMAP = false;
 const string HELP_PMAP = "Use physical map instead of a genetic map.";

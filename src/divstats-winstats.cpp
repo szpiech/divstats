@@ -456,7 +456,7 @@ double subsample_sfs(array_t *sfs, int H, int j){
    return res;
 }
 
-array_t *sfs_window(FreqData * freqData, pair_t* snpIndex, bool SFS_SUB) {
+array_t *sfs_window(FreqData * freqData, pair_t* snpIndex, bool SFS_SUB, bool CONST_N) {
    if (numSitesInDataWin(snpIndex) <= 0) return NULL;
    int nTargetHaps = freqData->nhaps;
    //cerr << "Calculating sfs across " << freqData->nhaps << " haps.\n";
@@ -467,9 +467,10 @@ array_t *sfs_window(FreqData * freqData, pair_t* snpIndex, bool SFS_SUB) {
          n = freqData->nhaps - freqData->nmissing[i];
          nhaps.push_back(n);
          if (nTargetHaps > n){
-            nTargetHaps = n;
+            nTargetHaps = n;            
          }
       }
+      if(CONST_N) nTargetHaps = freqData->nhaps - freqData->maxMissing;
    }
 
    array_t *sfs = initArray(nTargetHaps + 1);
