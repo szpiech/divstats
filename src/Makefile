@@ -32,30 +32,39 @@ L_PATH = ../lib/macos-arm
 #For static linking of norm program to gsl libs
 LINK_OPTS = $(L_PATH)/libgsl.a $(L_PATH)/libgslcblas.a
 
+#Every object depends on every header. Over-broad but always correct: before
+#this, the .o rules had no header dependencies at all, so changing a header
+#left stale objects linked against the old declarations. That is not a
+#cosmetic issue -- changing segsites() from int to double while
+#divstats-wintools.o was stale produced a binary that read the return value
+#from the integer register and reported S = 5.66e+07.
+HEADERS = divstats-cli.h divstats-data.h divstats-winstats.h divstats-wintools.h \
+          param_t.h binom.h gzstream.h
+
 all : divstats
 
 divstats : divstats-main.o divstats-data.o binom.o param_t.o gzstream.o divstats-winstats.o divstats-wintools.o
 	$(CC) $(G++FLAG) -o divstats divstats-main.o divstats-data.o binom.o param_t.o gzstream.o divstats-winstats.o divstats-wintools.o $(LINK_OPTS2) $(LINK_OPTS)
 
-divstats-main.o : divstats-main.cpp
+divstats-main.o : divstats-main.cpp $(HEADERS)
 	$(CC) $(G++FLAG) -c divstats-main.cpp $(I_PATH)
 
-divstats-data.o : divstats-data.cpp
+divstats-data.o : divstats-data.cpp $(HEADERS)
 	$(CC) $(G++FLAG) -c divstats-data.cpp $(I_PATH)
 
-divstats-winstats.o : divstats-winstats.cpp
+divstats-winstats.o : divstats-winstats.cpp $(HEADERS)
 	$(CC) $(G++FLAG) -c divstats-winstats.cpp $(I_PATH)
 
-divstats-wintools.o : divstats-wintools.cpp
+divstats-wintools.o : divstats-wintools.cpp $(HEADERS)
 	$(CC) $(G++FLAG) -c divstats-wintools.cpp $(I_PATH)
 
-binom.o : binom.cpp
+binom.o : binom.cpp $(HEADERS)
 	$(CC) $(G++FLAG) -c binom.cpp
 
-param_t.o : param_t.cpp
+param_t.o : param_t.cpp $(HEADERS)
 	$(CC) $(G++FLAG) -c param_t.cpp
 
-gzstream.o : gzstream.cpp
+gzstream.o : gzstream.cpp $(HEADERS)
 	$(CC) $(G++FLAG) -c gzstream.cpp $(I_PATH)
 
 #Golden-file regression suite. Compares this build's output against the

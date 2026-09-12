@@ -607,7 +607,14 @@ double tajimaD_from_sfs(array_t *sfs, double pi, double S) {
    return (pi - S / a1) / denominator;
 }
 
-int segsites(array_t *sfs) {
+//Returns double, not int: when the SFS has been subsampled for missing data
+//the bin counts are fractional expectations, so the number of segregating
+//sites is fractional too. Truncating it discarded up to one site and fed the
+//truncated value into Tajima's D as well as into the reported S column.
+//(An identical double-returning s_from_sfs sat below this function, unused
+//and undeclared in the header -- evidently the intended fix, never wired up.
+//Folded into this function rather than left as a second copy.)
+double segsites(array_t *sfs) {
    if (sfs == NULL) return MISSING;
    double s = 0;
    int n = sfs->size - 1;
@@ -617,16 +624,6 @@ int segsites(array_t *sfs) {
    return s;
 }
 
-double s_from_sfs(array_t *sfs) {
-   if (sfs == NULL) return MISSING;
-   double s = 0;
-   int n = sfs->size - 1;
-
-   for (int i = 1; i < n; i++) {
-      s += sfs->data[i];
-   }
-   return s;
-}
 
 double calc_a1(int n) {
    double a = 0;

@@ -50,7 +50,7 @@ double fayWuH_from_sfs(array_t *sfs, double pi = -9);
 double ehh_from_hfs(HaplotypeFrequencySpectrum *hfs);
 double ehhk_from_hfs(HaplotypeFrequencySpectrum *hfs, int k);
 
-int segsites(array_t *sfs);
+double segsites(array_t *sfs);
 double calc_a1(int n);
 double calc_a2(int n);
 double calc_e1(int n, double a1);
