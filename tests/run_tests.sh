@@ -208,6 +208,9 @@ define_case pik               table -- --vcf "$C" --sites --winsize 50  --winste
 define_case pik-narrow-window table -- --vcf "$C" --sites --winsize 10  --winstep 10  --pik 4
 define_case pik-multi-k       table -- --vcf "$C" --sites --winsize 50  --winstep 50  --pik 2 3 4 5 6 7 8
 define_case partition-sites   table -- --vcf "$C" --sites --winsize 100 --winstep 100 --partition 25 50 25 --pi --s --d
+# --ehh-part was unreachable before the validation order was fixed (B7):
+# it was tested against DO_PARTITION before --partition had been parsed.
+define_case ehh-part          table -- --vcf "$C" --sites --winsize 100 --winstep 100 --partition 25 50 25 --ehh 20 --ehh-part --pi --pmap
 define_case partition-bp      table -- --vcf "$C" --bp --winsize 200000 --winstep 200000 --partition 50000 100000 50000 --pi --s
 define_case tped-basic        table -- --tped "$SCRATCH/core.tped" --sites --winsize 100 --winstep 100 --pi --s --d --h
 define_case hemi              table -- --vcf "$H" --hemi --sites --winsize 100 --winstep 100 --pi --s --d --h

@@ -172,10 +172,9 @@ int main(int argc, char *argv[])
     ERROR = true;
   }
 
-  if(EHH_PART && (!CALC_EHH || !DO_PARTITION)) {
-    cerr << "ERROR: Must specify " << ARG_EHH << " in order to use " << ARG_EHH_PART << ".\n";
-    ERROR = true;
-  }
+  //--ehh-part is validated after the --partition block below, where
+  //DO_PARTITION is actually assigned. Checking it here tested DO_PARTITION
+  //while it still held its initializer, so the flag could never be used.
 
   bool NEED_GMAP = (CALC_EHHK || CALC_EHH || EHH_PART) && !PMAP;
 
@@ -216,11 +215,23 @@ int main(int argc, char *argv[])
     ERROR = true;
   }
   else if (PARTITIONS.size() > MAX_PARTITION) {
-    cerr << "ERROR: Request for " << PARTITIONS.size() << " partitions exceeds maximum allowed (" << WINSIZE << ").\n";
+    cerr << "ERROR: Request for " << PARTITIONS.size() << " partitions exceeds maximum allowed (" << MAX_PARTITION << ").\n";
     ERROR = true;
   }
   else {
     DO_PARTITION = true;
+  }
+
+  //Must follow the block above: DO_PARTITION is assigned there. Each
+  //requirement is reported separately so the message names the flag that is
+  //actually missing.
+  if (EHH_PART && !CALC_EHH) {
+    cerr << "ERROR: Must specify " << ARG_EHH << " in order to use " << ARG_EHH_PART << ".\n";
+    ERROR = true;
+  }
+  if (EHH_PART && !DO_PARTITION) {
+    cerr << "ERROR: Must specify " << ARG_PARTITION << " in order to use " << ARG_EHH_PART << ".\n";
+    ERROR = true;
   }
 
   for (int i = 0; i < PIK_CHOICE.size(); i++) {
