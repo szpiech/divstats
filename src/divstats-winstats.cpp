@@ -463,10 +463,23 @@ double pi_window(HaplotypeData * hapData, pair_t* snpIndex) {
    return (pi / denominator);
 }
 
+//Project one bin of an n-chromosome SFS down onto H chromosomes, by the
+//hypergeometric (sampling without replacement) weights.
+//
+//sfs->size is n+1: the array spans indices 0..n, i being the number of derived
+//alleles. The weights need the SAMPLE SIZE n, not the array length; using
+//sfs->size made the projection behave as if one extra ancestral chromosome
+//were present in every sample, and left the identity case (H == n) not equal
+//to the identity.
+//
+//The loop bound is coupled to n. It must still cover frequency classes up to
+//n-1, which is what "i < sfs->size - 1" did. Writing "i < n-1" after
+//correcting n silently drops the top segregating class -- verified to lose a
+//whole site's worth of mass on a fixture with a site at c == n-1.
 double subsample_sfs(array_t *sfs, int H, int j){
    double res = 0;
-   int n = sfs->size;
-   for (int i = j; i < n-1; i++){
+   int n = sfs->size - 1;
+   for (int i = j; i < n; i++){
       res += sfs->data[i] * nCk(i,j)*nCk(n-i,H-j)/nCk(n,H);
    }
    return res;

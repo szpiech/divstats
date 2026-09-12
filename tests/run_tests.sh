@@ -188,6 +188,17 @@ C="$SCRATCH/core.vcf"
 M="$SCRATCH/missing.vcf.gz"
 H="$SCRATCH/hemi.vcf.gz"
 
+# Hand-computable fixture: 4 diploid samples, 6 sites, one missing genotype at
+# site 4, so the window's target sample size is H = 6 while five sites carry
+# n = 8. The hypergeometric projection is small enough to evaluate exactly:
+#
+#   projected SFS  0.5, 1.714286, 1.071429, 2.071429, 0.535714, 0.107143, 0
+#   pi = 2.707143   S = 5.5   Tajima's D = 1.322279 (at S = 5.5: 0.701735)
+#
+# Before the population-size fix divstats reported pi = 2.6, matching a
+# projection from n+1 chromosomes. This case is the arithmetic check on the
+# subsampler; the numbers above are independent of the implementation.
+define_case subsample-toy     table -- --vcf "$HERE/data/subsample-toy.vcf.gz" --sites --winsize 6 --winstep 6 --pi --s --d
 define_case sites-basic       table -- --vcf "$C" --sites --winsize 100 --winstep 100 --pi --s --d --h
 define_case sites-pi-only     table -- --vcf "$C" --sites --winsize 100 --winstep 100 --pi
 define_case sites-sliding     table -- --vcf "$C" --sites --winsize 100 --winstep 25  --pi --s --d --h
