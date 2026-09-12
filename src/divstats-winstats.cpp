@@ -207,9 +207,14 @@ double pi_k2(HaplotypeFrequencySpectrum * hfs, int k, pair_t *subset_snps/*this 
    //If the kth most frequent haplotype class has > 1 haplotype associated with it, this counts how many
    int numNextClass = 0;
    //If the kth most frequent haplotype class has > 1 haplotype associated with it, this stores the ties
-   string *equalFreqHaps;//length == numNextClass
+   string *equalFreqHaps = NULL;//length == numNextClass
    int h = 0;
-   for (int i = 0; i < k; i++) {
+   //sortedCount holds hfs->size entries -- the number of DISTINCT counts,
+   //which is generally far smaller than hfs->numUniq, the number of distinct
+   //haplotypes that the guard above tests against. Bound by hfs->size, and
+   //stop as soon as k haplotypes have been collected, or this reads past the
+   //end of the array.
+   for (int i = 0; i < hfs->size && howmanyUniqHaps < k; i++) {
       int key = hfs->sortedCount[i];
       numNextClass = hfs->count2hap.count(key);
 
@@ -236,6 +241,16 @@ double pi_k2(HaplotypeFrequencySpectrum * hfs, int k, pair_t *subset_snps/*this 
 
    int numHapsMissing = k - howmanyUniqHaps;
 
+   //Invariant: the guard at the top of this function ensures numUniq >= k, and
+   //the counts over all distinct classes sum to numUniq, so the loop must
+   //either collect exactly k haplotypes (numHapsMissing == 0) or break having
+   //allocated equalFreqHaps. Assert it rather than dereferencing NULL below if
+   //the invariant is ever broken by a change to hfs construction.
+   if (numHapsMissing > 0 && equalFreqHaps == NULL) {
+      delete [] haps;
+      return MISSING;
+   }
+
    /*
       cout << "-----\n";
       for (int i = 0; i < howmanyUniqHaps; i++) {
@@ -250,8 +265,9 @@ double pi_k2(HaplotypeFrequencySpectrum * hfs, int k, pair_t *subset_snps/*this 
    if (numHapsMissing == 0) {
       for (int i = 0; i < k; i++) nhaps += hfs->hap2count[haps[i]];
       denominator = (nhaps) * (nhaps - 1) * 0.5;
-      //cout << pi / denominator << endl;
-      return pi_numerator(haps, k, hfs->hap2count, subset_snps) / denominator;
+      double res = pi_numerator(haps, k, hfs->hap2count, subset_snps) / denominator;
+      delete [] haps;//this path used to return without releasing haps
+      return res;
    }
    else {
       for (int i = 0; i < k; i++) {
