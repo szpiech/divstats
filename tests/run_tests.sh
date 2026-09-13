@@ -274,6 +274,12 @@ define_case subsample-toy     table -- --vcf "$HERE/data/subsample-toy.vcf.gz" -
 # -- so on x86-64 this case guards the arithmetic without necessarily
 # reproducing the original failure.
 define_case large-n-subsample table -- --vcf "$HERE/data/large-n.vcf.gz" --sites --winsize 20 --winstep 20 --pi --s --d --h
+# Tajima's D with no segregating sites in the window: 119 of the 200 windows
+# here have S = 0, where the numerator and the variance estimate are both 0.
+# This pins the result at the na-string rather than 0, inf, or whatever
+# 0.0/0.0 happens to produce. Also exercises --na-string itself.
+define_case tinywin-undef    table -- --vcf "$C" --sites --winsize 2 --winstep 2 --pi --s --d --h
+define_case na-string-NA     table -- --vcf "$C" --sites --winsize 10 --winstep 10 --pik 4 --na-string NA
 define_case sites-basic       table -- --vcf "$C" --sites --winsize 100 --winstep 100 --pi --s --d --h
 # Same arguments as sites-basic against the same variants stored as BCF, and
 # it shares sites-basic's golden -- so it asserts that the binary format gives

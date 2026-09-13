@@ -34,6 +34,13 @@ const string ARG_HEMI = "--hemi";
 const bool DEFAULT_HEMI = false;
 const string HELP_HEMI = "Input data is hemizygous (e.g. chrY).";
 
+const string ARG_NA_STRING = "--na-string";
+const string DEFAULT_NA_STRING = "nan";
+const string HELP_NA_STRING = "Token written for statistics that are undefined in a window\n\
+\t(too few sites, no segregating sites, fewer haplotypes than --pik k).\n\
+\tPrevious versions wrote -999, a numeric value that any downstream\n\
+\tmean() or quantile() absorbs as data.";
+
 const string ARG_OUTFILE = "--out";
 const string DEFAULT_OUTFILE = "outfile";
 const string HELP_OUTFILE = "The basename for all output files.";

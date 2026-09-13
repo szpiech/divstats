@@ -25,6 +25,8 @@
 #include "divstats-data.h"
 #include "divstats-cli.h"
 
+#include <cmath>
+
 using namespace std;
 
 int main(int argc, char *argv[])
@@ -64,6 +66,7 @@ int main(int argc, char *argv[])
   params.addFlag(ARG_CONST_N_SUB, DEFAULT_CONST_N_SUB, "", HELP_CONST_N_SUB);
   params.addFlag(ARG_2_SWEEPFINDER, DEFAULT_2_SWEEPFINDER, "SILENT", HELP_2_SWEEPFINDER);
   params.addFlag(ARG_PMAP, DEFAULT_PMAP, "", HELP_PMAP);
+  params.addFlag(ARG_NA_STRING, DEFAULT_NA_STRING, "", HELP_NA_STRING);
   
   try {
     params.parseCommandLine(argc, argv);
@@ -314,6 +317,7 @@ int main(int argc, char *argv[])
   vector<string> colNames = buildColumnNames(&params, DO_PARTITION);
   int numStats = (int)colNames.size();
 
+  string NA_STRING = params.getStringFlag(ARG_NA_STRING);
   cerr << "Calculating " << numStats << " statistics in " << windows->size() << " windows.\n";
 
   double **results = new double*[windows->size()];
@@ -366,7 +370,12 @@ int main(int argc, char *argv[])
       << windows->at(w)->winEnd - windows->at(w)->winStart + 1 << "\t"
       << windows->at(w)->end - windows->at(w)->start + 1;
     for (int s = 0; s < numStats; s++) {
-      fout << "\t" << results[w][s];
+      //An undefined statistic is NaN internally; what reaches the file is the
+      //--na-string token. The default, "nan", is what iostream would print
+      //anyway, so the branch matters only when the user asks for something
+      //else (NA for R, an empty field, or -999 to restore 1.x output).
+      if (std::isnan(results[w][s])) fout << "\t" << NA_STRING;
+      else fout << "\t" << results[w][s];
     }
     fout << endl;
   }

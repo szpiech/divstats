@@ -19,6 +19,7 @@
 #ifndef __XP_IHH_DATA_H__
 #define __XP_IHH_DATA_H__
 #include <string>
+#include <limits>
 #include <iostream>
 #include <fstream>
 #include "gzstream.h"
@@ -27,6 +28,14 @@
 using namespace std;
 
 const double MISSING = -999;
+//Undefined STATISTICS are NaN, not -999. A numeric sentinel is silently
+//absorbed by anything that averages a column -- mean(), quantile(), a
+//smoothing window -- turning "this window has no answer" into a plausible
+//looking number roughly three orders of magnitude from any real pi or D.
+//NaN propagates instead, and the token written to the file is set by
+//--na-string. MISSING is still used as an integer index sentinel (s_pi,
+//s_S), where only its being negative matters.
+const double UNDEFINED_STAT = std::numeric_limits<double>::quiet_NaN();
 const char MISSING_CHAR = '9';
 const char MISSING_ALLELE = '-';
 const string TPED_MISSING = "-9";

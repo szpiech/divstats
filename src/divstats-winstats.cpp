@@ -63,7 +63,7 @@ int hamming_dist_str(string one, string two, pair_t *subset_snps) {
 }
 
 double ehh_from_hfs(HaplotypeFrequencySpectrum * hfs) {
-   if (hfs == NULL) return MISSING;
+   if (hfs == NULL) return UNDEFINED_STAT;
    map<string, int>::iterator it;
    double tot = 0;
    double homozygosity = 0;
@@ -76,7 +76,7 @@ double ehh_from_hfs(HaplotypeFrequencySpectrum * hfs) {
 }
 
 double ehhk_from_hfs(HaplotypeFrequencySpectrum * hfs, int k) {
-   if (hfs == NULL) return MISSING;
+   if (hfs == NULL) return UNDEFINED_STAT;
    double res = 0;
    double homozygosity = 0;
    double tot = 0;
@@ -193,7 +193,7 @@ double pi_numerator(string * haps, int length, map<string, int> &hap2count, pair
 
 */
 double pi_k2(HaplotypeFrequencySpectrum * hfs, int k, pair_t *subset_snps/*this is assumed to be offset*/) {
-   if (hfs == NULL || (hfs->numUniq < k)) return MISSING;
+   if (hfs == NULL || (hfs->numUniq < k)) return UNDEFINED_STAT;
 
    pair <multimap<int, string>::iterator, multimap<int, string>::iterator> ret;
    multimap<int, string>::iterator it;
@@ -248,7 +248,7 @@ double pi_k2(HaplotypeFrequencySpectrum * hfs, int k, pair_t *subset_snps/*this 
    //the invariant is ever broken by a change to hfs construction.
    if (numHapsMissing > 0 && equalFreqHaps == NULL) {
       delete [] haps;
-      return MISSING;
+      return UNDEFINED_STAT;
    }
 
    /*
@@ -341,7 +341,7 @@ double pi_k2(HaplotypeFrequencySpectrum * hfs, int k, pair_t *subset_snps/*this 
 }
 
 double pi_k(HaplotypeFrequencySpectrum * hfs, int k) {
-   if (hfs == NULL) return MISSING;
+   if (hfs == NULL) return UNDEFINED_STAT;
    k = (hfs->numUniq < k) ? hfs->numUniq : k;
    string *haps = new string[k];
 
@@ -463,7 +463,7 @@ int compare (const void *a, const void *b)
 }
 
 double pi_window(HaplotypeData * hapData, pair_t* snpIndex) {
-   if (numSitesInDataWin(snpIndex) <= 0) return MISSING;
+   if (numSitesInDataWin(snpIndex) <= 0) return UNDEFINED_STAT;
    //int startSnpIndex; int endSnpIndex;
    double pi = 0;
    double denominator = (hapData->nhaps) * (hapData->nhaps - 1) * 0.5;
@@ -634,7 +634,7 @@ array_t *sfs_window(FreqData * freqData, pair_t* snpIndex) {
 */
 
 double pi_from_sfs(array_t *sfs) {
-   if (sfs == NULL) return MISSING;
+   if (sfs == NULL) return UNDEFINED_STAT;
    double pi = 0;
    int n = sfs->size - 1;
    double denominator = n * (n - 1) * 0.5;
@@ -646,7 +646,7 @@ double pi_from_sfs(array_t *sfs) {
 }
 
 double fayWuH_from_sfs(array_t *sfs, double pi) {
-   if (sfs == NULL) return MISSING;
+   if (sfs == NULL) return UNDEFINED_STAT;
    if (pi < 0) {
       pi = pi_from_sfs(sfs);
    }
@@ -654,7 +654,7 @@ double fayWuH_from_sfs(array_t *sfs, double pi) {
 }
 
 double thetaH_from_sfs(array_t *sfs) {
-   if (sfs == NULL) return MISSING;
+   if (sfs == NULL) return UNDEFINED_STAT;
    double thetaH = 0;
    int n = sfs->size - 1;
    double denominator = n * (n - 1) * 0.5;
@@ -666,7 +666,7 @@ double thetaH_from_sfs(array_t *sfs) {
 }
 
 double tajimaD_from_sfs(array_t *sfs, double pi, double S) {
-   if (sfs == NULL) return MISSING;
+   if (sfs == NULL) return UNDEFINED_STAT;
    if (pi < 0) {
       pi = pi_from_sfs(sfs);
    }
@@ -682,7 +682,29 @@ double tajimaD_from_sfs(array_t *sfs, double pi, double S) {
    e1 = calc_e1(n, a1);
    e2 = calc_e2(n, a1, a2);
 
-   denominator = sqrt(e1 * S + e2 * S * (S - 1));
+   //Tajima's D is undefined with no segregating sites: the numerator is
+   //pi - S/a1 = 0 and the variance estimate is 0, so this was evaluating
+   //0.0/0.0. That is where the nan came from in 119 of 200 windows at
+   //--winsize 2 on the test fixture, and in 71 windows at --winsize 3 on a
+   //400-haplotype file with 2% missing genotypes. nan is the right answer;
+   //it should be reached deliberately rather than by dividing by zero.
+   //
+   //The radicand check is defensive and cannot currently change a value.
+   //radicand = S*(e1 + e2*(S-1)), whose sign for 0 < S <= 1 is worst as
+   //S -> 0+, tending to e1 - e2; e1 > e2 for every n from 4 to 5000 (checked
+   //numerically), and for S > 1 the e2*(S-1) term is positive, so the
+   //radicand is positive whenever n >= 4. At n = 2 and n = 3 the standard
+   //coefficients give e1 = e2 = 0 exactly, so the radicand is 0 for any S --
+   //but pi == S/a1 identically at those sample sizes (each segregating site
+   //contributes 1 and 2/3 respectively, matching 1/a1), so the numerator is
+   //also 0 and the result is nan with or without this guard. Instrumenting
+   //the branch over ~15,000 fractional-S evaluations reached it zero times.
+   //It is kept so that a future change to the coefficients cannot
+   //reintroduce a silent sqrt of a negative number.
+   double radicand = e1 * S + e2 * S * (S - 1);
+   if (S <= 0 || radicand <= 0) return UNDEFINED_STAT;
+
+   denominator = sqrt(radicand);
 
    return (pi - S / a1) / denominator;
 }
@@ -695,7 +717,7 @@ double tajimaD_from_sfs(array_t *sfs, double pi, double S) {
 //and undeclared in the header -- evidently the intended fix, never wired up.
 //Folded into this function rather than left as a second copy.)
 double segsites(array_t *sfs) {
-   if (sfs == NULL) return MISSING;
+   if (sfs == NULL) return UNDEFINED_STAT;
    double s = 0;
    int n = sfs->size - 1;
    for (int i = 1; i < n; i++) {
