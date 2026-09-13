@@ -659,10 +659,12 @@ void releaseHapData(HaplotypeData *data)
 
     delete [] data->data;
 
-    data->data = NULL;
-    data->nhaps = -9;
-    data->nloci = -9;
-    data = NULL;
+    //The struct itself was never freed. The three assignments below it -- and
+    //`data = NULL`, which only clears this function's own by-value copy of the
+    //caller's pointer and so does nothing at all -- left the HaplotypeData
+    //allocation leaked on every call. releaseMapData, releaseFreqData and
+    //releaseArray all delete their struct; this one did not.
+    delete data;
     return;
 }
 
