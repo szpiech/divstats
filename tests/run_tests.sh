@@ -52,8 +52,33 @@ PASS=0; FAIL=0; SKIP=0
 FAILED_CASES=()
 
 # ------------------------------------------------------------------ scratch
-SCRATCH="$(mktemp -d "${TMPDIR:-/tmp}/divstats-tests.XXXXXX")"
-cleanup() { [ "$KEEP" = 1 ] && echo "scratch kept: $SCRATCH" || rm -rf "$SCRATCH"; }
+# mktemp can fail -- e.g. TMPDIR set to a relative or nonexistent path -- and a
+# bare "rm -rf $SCRATCH" in the exit trap then targets whatever the variable
+# expanded to. Validate before anything is registered for deletion, and have
+# cleanup refuse any path that is not a scratch directory of ours.
+SCRATCH="$(mktemp -d "${TMPDIR:-/tmp}/divstats-tests.XXXXXX" 2>/dev/null)" || SCRATCH=""
+if [ -z "$SCRATCH" ] || [ ! -d "$SCRATCH" ]; then
+  echo "error: could not create a scratch directory (TMPDIR='${TMPDIR:-unset}')" >&2
+  exit 2
+fi
+SCRATCH="$(cd "$SCRATCH" && pwd -P)"
+case "$SCRATCH" in
+  */divstats-tests.??????) : ;;
+  *) echo "error: unexpected scratch path '$SCRATCH'; refusing to run" >&2; exit 2 ;;
+esac
+
+cleanup() {
+  case "${SCRATCH:-}" in
+    */divstats-tests.??????) : ;;
+    *) return 0 ;;                      #never remove anything else
+  esac
+  [ -d "$SCRATCH" ] || return 0
+  if [ "$KEEP" = 1 ]; then
+    echo "scratch kept: $SCRATCH"
+  else
+    rm -rf -- "$SCRATCH"
+  fi
+}
 trap cleanup EXIT
 
 # ------------------------------------------------------------ fixture build
@@ -108,6 +133,14 @@ compare_table() {
     function abs(x){ return x<0 ? -x : x }
     function isnum(s){ return s ~ /^[+-]?([0-9]+\.?[0-9]*|\.[0-9]+)([eE][+-]?[0-9]+)?$/ }
     function isint(s){ return s ~ /^[+-]?[0-9]+$/ }
+    # nan/inf must be handled EXPLICITLY, before any use of == or <, and the
+    # comparison must be forced to strings. awk parses "nan" with strtod and
+    # then compares numerically through a three-way (a<b ? -1 : a>b ? 1 : 0);
+    # both tests are false for NaN, so "nan" compares EQUAL to every number.
+    # Without this the suite silently passes a build that emits nan for every
+    # statistic -- which is exactly what a cohort past the nCk overflow
+    # threshold produces, and exactly what the log-space weights fix.
+    function nonfinite(s){ return tolower(s) ~ /^[+-]?(nan|inf|infinity)$/ }
     NR==FNR {
       n=split($0, f, /[ \t]+/); erows++
       for (i=1;i<=n;i++) E[erows,i]=f[i]
@@ -127,7 +160,12 @@ compare_table() {
       if (arows>erows) { extra++; next }
       for (i=1;i<=n;i++) {
         a=f[i]; e=E[arows,i]
-        if (a==e) continue
+        if (nonfinite(a) || nonfinite(e)) {
+          # identical tokens (nan vs nan) match; anything else is a difference
+          if (("" a) != ("" e)) { diff[i]++; md[i]=-1 }
+          continue
+        }
+        if (("" a) == ("" e)) continue
         if (isnum(a) && isnum(e)) {
           if (isint(a) && isint(e)) { diff[i]++; if (1>md[i]) md[i]=1; continue }
           d = abs(a-e) / (abs(e)>1e-300 ? abs(e) : 1)
@@ -141,8 +179,12 @@ compare_table() {
       for (i in diff) {
         frac = diff[i]/ndata
         tolerated = (tolcol!="" && name[i] ~ tolcol && frac <= maxfrac+1e-12)
-        printf "    column %-14s %4d/%d rows differ, max rel dev %.3g%s\n",
-               name[i], diff[i], ndata, md[i], (tolerated ? "  [tolerated]" : "")
+        if (md[i] < 0)
+          printf "    column %-14s %4d/%d rows differ, non-numeric (nan/inf or text)%s\n",
+                 name[i], diff[i], ndata, (tolerated ? "  [tolerated]" : "")
+        else
+          printf "    column %-14s %4d/%d rows differ, max rel dev %.3g%s\n",
+                 name[i], diff[i], ndata, md[i], (tolerated ? "  [tolerated]" : "")
         if (!tolerated) bad=1
       }
       exit (bad ? 1 : 0)
