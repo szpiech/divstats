@@ -245,12 +245,22 @@ define_case subsample-toy     table -- --vcf "$HERE/data/subsample-toy.vcf.gz" -
 # coefficient separately, and it is the PRODUCT nCk(i,j)*nCk(n-i,H-j) that
 # overflows first -- two mid-range coefficients near C(600,300) ~ 1e179
 # multiply to inf long before C(n,H) itself is large. inf/inf is nan, so every
-# SFS statistic came back nan on this fixture. 1040 haplotypes at 1% missing
-# does NOT trigger it (H sits close to n, so the coefficients stay small):
-# the fixture needs enough missingness to push the bins toward the middle.
+# SFS statistic came back nan on this fixture.
+#
+# Measured with the pre-fix build (pi for a single 20-site window):
+#     1040 haplotypes,  1% missing -> nan
+#     1040 haplotypes,  5% missing -> 4.96285
+#     1040 haplotypes, 10% missing -> 4.94862
+#     1200 haplotypes,  1% missing -> nan
+#     1200 haplotypes,  5% missing -> nan
+# So the trigger is NOT monotone in the missing-data rate: what matters is
+# where H (the per-window minimum sample size) lands relative to the per-site
+# sample sizes, which decides how close j and H-j get to the middle of their
+# ranges. This fixture was chosen empirically, not derived.
+#
 # Threshold is platform-dependent -- with 80-bit long double it is far higher
-# -- so on x86-64 this case guards the arithmetic without having reproduced
-# the original failure.
+# -- so on x86-64 this case guards the arithmetic without necessarily
+# reproducing the original failure.
 define_case large-n-subsample table -- --vcf "$HERE/data/large-n.vcf.gz" --sites --winsize 20 --winstep 20 --pi --s --d --h
 define_case sites-basic       table -- --vcf "$C" --sites --winsize 100 --winstep 100 --pi --s --d --h
 define_case sites-pi-only     table -- --vcf "$C" --sites --winsize 100 --winstep 100 --pi
