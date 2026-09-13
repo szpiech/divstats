@@ -129,6 +129,13 @@ build_fixtures() {
   awk 'BEGIN{OFS="\t"} /^#/{print; next}
        {n++; if (n > 200) $1="chr10"; print}' "$SCRATCH/core.vcf" \
      | gzip -c > "$SCRATCH/multichr.vcf.gz"
+  # Every SNP placed exactly on a --winsize 1000 window END (999, 1999, ...).
+  # The inclusive-boundary walk used to stop ON such a SNP and then decrement
+  # past it, so every window reported zero SNPs and the whole file was lost.
+  awk 'BEGIN{OFS="\t"} /^#/{print; next}
+       {n++; $2 = 1000*(n-1) + 999; print}' "$SCRATCH/core.vcf" \
+     | gzip -c > "$SCRATCH/onboundary.vcf.gz"
+
   awk '/^#/{print; next} {rec[++n]=$0}
        END{for(i=n;i>=1;i--) print rec[i]}' "$SCRATCH/core.vcf" \
      | gzip -c > "$SCRATCH/unsorted.vcf.gz"
@@ -287,6 +294,11 @@ define_case sites-basic       table -- --vcf "$C" --sites --winsize 100 --winste
 define_case bcf-basic         table -- --vcf "$HERE/data/core.bcf" --sites --winsize 100 --winstep 100 --pi --s --d --h
 define_case sites-pi-only     table -- --vcf "$C" --sites --winsize 100 --winstep 100 --pi
 define_case sites-sliding     table -- --vcf "$C" --sites --winsize 100 --winstep 25  --pi --s --d --h
+# SNPs sitting exactly on a window end -- see build_fixtures. Against the
+# previous build every window here reports 0 SNPs and the statistics are all
+# undefined; the boundary is inclusive at both ends, as findInclusiveSNPIndicies
+# is named for.
+define_case bp-on-boundary   table -- --vcf "$SCRATCH/onboundary.vcf.gz" --bp --winsize 1000 --winstep 1000 --pi --s --d --h
 define_case bp-basic          table -- --vcf "$C" --bp --winsize 200000 --winstep 200000 --pi --s --d --h
 define_case bp-sliding        table -- --vcf "$C" --bp --winsize 200000 --winstep 50000 --pi --s
 define_case missing-default   table -- --vcf "$M" --sites --winsize 100 --winstep 100 --pi --s --d --h

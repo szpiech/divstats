@@ -41,7 +41,9 @@ analysed incorrectly.
     --sites --winsize 100 --winstep 100     # 100 SNPs, tiling
     --bp --winsize 10000 --winstep 1000     # 10 kb, sliding
 
-`--partition a b c` splits each window into sub-windows by percentage.
+`--partition a b c` splits each window into sub-windows. The values are
+percentages under `--sites` and base pairs under `--bp`, and must sum to 100
+or to `--winsize` respectively.
 
 ## Statistics
 

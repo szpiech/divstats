@@ -395,17 +395,35 @@ pair_t* findInclusiveSNPIndicies(int startSnpIndex, int currWinStart, int WINSIZ
 		return snps;
 	}
 
-	while (mapData->physicalPos[startSnpIndex] < currWinStart) {
+	//The window is [currWinStart, currWinEnd] inclusive at both ends, as the
+	//function name says. The previous walk was
+	//
+	//	while (physicalPos[endSnpIndex] < currWinEnd) { endSnpIndex++; ... }
+	//	endSnpIndex--;
+	//
+	//which dropped a SNP sitting exactly on currWinEnd: the loop stops as soon
+	//as the position is not strictly less than the end, so for equality it
+	//stops ON the SNP that belongs in the window, and the decrement then
+	//excludes it. With --bp and a round --winsize, positions landing exactly on
+	//a boundary are common, and such a SNP was counted in neither the window
+	//that should have contained it nor the next one.
+	//
+	//The bound test also broke the last window. It read
+	//`if (endSnpIndex >= numSnps - 1) break;` after the increment, so the walk
+	//stopped at numSnps - 1 and the unconditional decrement then gave
+	//numSnps - 2 -- discarding the final SNP of the data whenever the last
+	//window extended past it. The clamp on the next line tested
+	//`endSnpIndex >= numSnps`, which that break made unreachable.
+	while (startSnpIndex < numSnps && mapData->physicalPos[startSnpIndex] < currWinStart) {
 		startSnpIndex++;
 	}
-	while (mapData->physicalPos[endSnpIndex] < currWinEnd) {
+	endSnpIndex = startSnpIndex;
+	while (endSnpIndex < numSnps && mapData->physicalPos[endSnpIndex] <= currWinEnd) {
 		endSnpIndex++;
-		if (endSnpIndex >= numSnps - 1) break;
 	}
-	endSnpIndex--;
-	endSnpIndex = (endSnpIndex >= numSnps) ? numSnps - 1 : endSnpIndex;
+	endSnpIndex--;	//last SNP at or before currWinEnd; startSnpIndex-1 if none
 
 	snps->start = startSnpIndex;
-	snps->end = endSnpIndex;
+	snps->end = endSnpIndex;	//end < start means the window holds no SNPs
 	return snps;
 }
