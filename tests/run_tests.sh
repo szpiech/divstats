@@ -120,6 +120,18 @@ build_fixtures() {
 
   gzip -c "$SCRATCH/missing.vcf" > "$SCRATCH/missing.vcf.gz"
   gzip -c "$SCRATCH/hemi.vcf"    > "$SCRATCH/hemi.vcf.gz"
+
+  # Malformed inputs, for the reject cases. Both used to be accepted silently
+  # and produce wrong windows.
+  #   multichr : the second half of the records relabelled to another contig
+  #              already declared in the header
+  #   unsorted : the same records in reverse position order
+  awk 'BEGIN{OFS="\t"} /^#/{print; next}
+       {n++; if (n > 200) $1="chr10"; print}' "$SCRATCH/core.vcf" \
+     | gzip -c > "$SCRATCH/multichr.vcf.gz"
+  awk '/^#/{print; next} {rec[++n]=$0}
+       END{for(i=n;i>=1;i--) print rec[i]}' "$SCRATCH/core.vcf" \
+     | gzip -c > "$SCRATCH/unsorted.vcf.gz"
 }
 
 # --------------------------------------------------------------- comparators
@@ -263,6 +275,10 @@ define_case subsample-toy     table -- --vcf "$HERE/data/subsample-toy.vcf.gz" -
 # reproducing the original failure.
 define_case large-n-subsample table -- --vcf "$HERE/data/large-n.vcf.gz" --sites --winsize 20 --winstep 20 --pi --s --d --h
 define_case sites-basic       table -- --vcf "$C" --sites --winsize 100 --winstep 100 --pi --s --d --h
+# Same arguments as sites-basic against the same variants stored as BCF, and
+# it shares sites-basic's golden -- so it asserts that the binary format gives
+# identical statistics to the text one, not merely that BCF parses.
+define_case bcf-basic         table -- --vcf "$HERE/data/core.bcf" --sites --winsize 100 --winstep 100 --pi --s --d --h
 define_case sites-pi-only     table -- --vcf "$C" --sites --winsize 100 --winstep 100 --pi
 define_case sites-sliding     table -- --vcf "$C" --sites --winsize 100 --winstep 25  --pi --s --d --h
 define_case bp-basic          table -- --vcf "$C" --bp --winsize 200000 --winstep 200000 --pi --s --d --h
@@ -300,11 +316,18 @@ define_case sweepfinder       stdout -- --vcf "$C" --sites --winsize 100 --winst
 # Thread invariance: compared against the SINGLE-THREADED sites-basic golden,
 # so this asserts a property (results independent of --threads), not just
 # self-consistency.
+# Reject cases: the argument after the kind is a regex the diagnostic must
+# match. Both of these inputs used to be accepted silently -- the
+# multi-chromosome file was merged into one coordinate space and labelled with
+# the last chromosome seen, and the unsorted file produced windows containing
+# a subset of the sites with -999 statistics in the first one.
+define_case reject-multichr   reject "more than one chromosome" 0 -- --vcf "$SCRATCH/multichr.vcf.gz" --bp --winsize 5000 --winstep 5000 --pi
+define_case reject-unsorted   reject "not sorted by position"   0 -- --vcf "$SCRATCH/unsorted.vcf.gz" --bp --winsize 5000 --winstep 5000 --pi
 define_case threads-4         table -- --vcf "$C" --sites --winsize 100 --winstep 100 --pi --s --d --h --threads 4
 # ===========================================================================
 
 golden_for() {   # thread-invariance shares sites-basic's golden
-  case "$1" in threads-4) echo "sites-basic" ;; *) echo "$1" ;; esac
+  case "$1" in threads-4|bcf-basic) echo "sites-basic" ;; *) echo "$1" ;; esac
 }
 
 run_one() {
@@ -325,6 +348,30 @@ run_one() {
       ;;
   esac
 
+  # A reject case asserts that bad input is REFUSED, which is the whole point
+  # of the multi-chromosome and sort-order checks -- there is no output table
+  # to compare, so the assertion is the exit status plus a diagnostic that
+  # names the problem. Without this kind, a regression that silently went back
+  # to accepting these files would look like a pass.
+  if [ "$kind" = "reject" ]; then
+    if [ $rc -eq 0 ]; then
+      printf "  FAIL  %-18s expected rejection, exited 0\n" "$name"
+      FAIL=$((FAIL+1)); FAILED_CASES+=("$name"); return
+    fi
+    if [ $rc -ge 128 ]; then
+      printf "  FAIL  %-18s died on signal (exit %d), expected a clean refusal\n" "$name" $rc
+      sed 's/^/    /' "$out.err" | tail -2
+      FAIL=$((FAIL+1)); FAILED_CASES+=("$name"); return
+    fi
+    if ! grep -qE "$tolcol" "$out.err"; then
+      printf "  FAIL  %-18s refused, but stderr does not match /%s/\n" "$name" "$tolcol"
+      sed 's/^/    /' "$out.err" | head -2
+      FAIL=$((FAIL+1)); FAILED_CASES+=("$name"); return
+    fi
+    printf "  ok    %-18s refused cleanly (exit %d)\n" "$name" $rc
+    PASS=$((PASS+1)); return
+  fi
+
   if [ $rc -ne 0 ]; then
     printf "  FAIL  %-18s exited %d\n" "$name" $rc
     sed 's/^/    /' "$out.err" | tail -3
@@ -343,7 +390,9 @@ run_one() {
   fi
 
   if [ "$REGEN" = 1 ]; then
-    [ "$name" = "threads-4" ] && { printf "  ----  %-18s shares sites-basic golden\n" "$name"; return; }
+    case "$name" in
+      threads-4|bcf-basic) printf "  ----  %-18s shares sites-basic golden\n" "$name"; return ;;
+    esac
     mkdir -p "$EXPECTED"
     case "$kind" in
       stdout) hash_file "$produced" > "$golden_path" ;;

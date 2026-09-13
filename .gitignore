@@ -6,3 +6,7 @@ sample.*
 .DS_Store
 divstats
 *.divstats.out
+# vendored GSL, no longer used (B3 removed the only gsl_combination call)
+lib/*/libgsl.a
+lib/*/libgslcblas.a
+include/gsl/

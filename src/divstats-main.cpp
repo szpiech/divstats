@@ -20,6 +20,7 @@
 #include <string>
 #include "param_t.h"
 #include "divstats-wintools.h"
+#include "divstats-hts.h"
 #include "divstats-winstats.h"
 #include "divstats-data.h"
 #include "divstats-cli.h"
@@ -266,18 +267,31 @@ int main(int argc, char *argv[])
   HaplotypeData *hapData;
   MapData *mapData;
   FreqData *freqData;
-  if (TPED){
-    hapData = readHaplotypeDataTPED(tpedFilename);
+  //The readers signal failure with `throw 0`, and only parseCommandLine was
+  //wrapped -- so a malformed input aborted with SIGABRT and "terminating due
+  //to uncaught exception" after its own diagnostic. Catch here and exit 1.
+  //VCF/BCF is read in one pass, filling genotypes and positions together;
+  //TPED still uses the two-function path.
+  MapData *vcfMap = NULL;
+  try {
+    if (TPED){
+      hapData = readHaplotypeDataTPED(tpedFilename);
+    }
+    else if (VCF){
+      readVariantDataHTS(vcfFilename, HEMI, &hapData, &vcfMap);
+    }
+    if (NEED_GMAP){
+      //an explicit --map overrides the positions carried in the variant file
+      if (vcfMap != NULL) releaseMapData(vcfMap);
+      mapData = readMapData(mapFilename, hapData->nloci);
+    }
+    else{//load physical positions
+      if(TPED) mapData = readMapDataTPED(tpedFilename, hapData->nloci, hapData->nhaps);
+      else if (VCF) mapData = vcfMap;
+    }
   }
-  else if (VCF){
-    hapData = readHaplotypeDataVCF(vcfFilename,HEMI); 
-  }
-  if (NEED_GMAP){
-    mapData = readMapData(mapFilename, hapData->nloci);
-  }
-  else{//load physical positions
-    if(TPED) mapData = readMapDataTPED(tpedFilename, hapData->nloci, hapData->nhaps);
-    else if (VCF) mapData = readMapDataVCF(vcfFilename, hapData->nloci);
+  catch (...) {
+    return 1;
   }
   freqData = initFreqData(hapData);
 

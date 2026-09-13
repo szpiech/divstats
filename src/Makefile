@@ -30,9 +30,13 @@ L_PATH = ../lib/macos-arm
 #L_PATH = ../lib/win32
 
 #For static linking of norm program to gsl libs
-#GSL was needed only for gsl_combination, in the pi_k2 tie enumeration that
-#the closed form replaces. Nothing in the tree uses GSL now.
-LINK_OPTS =
+#htslib supplies the VCF/BCF reader. Configured without bzip2, lzma, libcurl
+#and libdeflate (those are CRAM features), so it needs nothing beyond the -lz
+#already linked -- see lib/build_htslib.sh.
+#
+#GSL is gone: gsl_combination was its only use, in the pi_k2 tie enumeration
+#that the closed form replaces.
+LINK_OPTS = $(L_PATH)/libhts.a
 
 #Every object depends on every header. Over-broad but always correct: before
 #this, the .o rules had no header dependencies at all, so changing a header
@@ -40,19 +44,22 @@ LINK_OPTS =
 #cosmetic issue -- changing segsites() from int to double while
 #divstats-wintools.o was stale produced a binary that read the return value
 #from the integer register and reported S = 5.66e+07.
-HEADERS = divstats-cli.h divstats-data.h divstats-winstats.h divstats-wintools.h \
+HEADERS = divstats-cli.h divstats-data.h divstats-hts.h divstats-winstats.h divstats-wintools.h \
           param_t.h binom.h gzstream.h
 
 all : divstats
 
-divstats : divstats-main.o divstats-data.o binom.o param_t.o gzstream.o divstats-winstats.o divstats-wintools.o
-	$(CC) $(G++FLAG) -o divstats divstats-main.o divstats-data.o binom.o param_t.o gzstream.o divstats-winstats.o divstats-wintools.o $(LINK_OPTS2) $(LINK_OPTS)
+divstats : divstats-main.o divstats-data.o divstats-hts.o binom.o param_t.o gzstream.o divstats-winstats.o divstats-wintools.o
+	$(CC) $(G++FLAG) -o divstats divstats-main.o divstats-data.o divstats-hts.o binom.o param_t.o gzstream.o divstats-winstats.o divstats-wintools.o $(LINK_OPTS2) $(LINK_OPTS)
 
 divstats-main.o : divstats-main.cpp $(HEADERS)
 	$(CC) $(G++FLAG) -c divstats-main.cpp $(I_PATH)
 
 divstats-data.o : divstats-data.cpp $(HEADERS)
 	$(CC) $(G++FLAG) -c divstats-data.cpp $(I_PATH)
+
+divstats-hts.o : divstats-hts.cpp $(HEADERS)
+	$(CC) $(G++FLAG) -c divstats-hts.cpp $(I_PATH)
 
 divstats-winstats.o : divstats-winstats.cpp $(HEADERS)
 	$(CC) $(G++FLAG) -c divstats-winstats.cpp $(I_PATH)

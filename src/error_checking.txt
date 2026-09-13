@@ -1,0 +1,10 @@
+==13995== Invalid read of size 4
+==13995==    at 0x42A751: findInclusiveSNPIndicies(int, int, int, MapData*) (divstats-wintools.cpp:307)
+==13995==    by 0x42767F: findAllWindows(MapData*, int, int, bool) (divstats-wintools.cpp:13)
+==13995==    by 0x4059B5: main (divstats-main.cpp:279)
+==13995==  Address 0x5e9fd64 is 0 bytes after a block of size 6,692 alloc'd
+==13995==    at 0x4C2C916: operator new[](unsigned long) (vg_replace_malloc.c:640)
+==13995==    by 0x40BAC6: initMapData(int) (divstats-data.cpp:320)
+==13995==    by 0x40B82B: readMapDataVCF(std::string, int) (divstats-data.cpp:292)
+==13995==    by 0x4058AE: main (divstats-main.cpp:267)
+==13995== 
