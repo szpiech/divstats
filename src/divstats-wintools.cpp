@@ -36,6 +36,90 @@ void releaseAllWindows(vector< pair_t* > *windows) {
 	return;
 }
 
+//The column names are a pure function of the command line, but they used to be
+//assembled as a side effect of thread 0 processing window 0
+//(`if (i == 0) (*names) += "pi ";`). Two consequences: a run that produced zero
+//windows emitted a header with no statistic columns at all, and any change to
+//how windows are scheduled would silently desynchronise the header from the
+//data. numStats was computed separately in main by arithmetic that mirrored the
+//branch structure here by hand, which is a second copy of the same knowledge.
+//
+//This returns the names in the order calc_stats fills results[][], so main can
+//write the header before any thread starts and take numStats from the count.
+//It must stay in lockstep with the two blocks below; the runtime check in main
+//compares the count against what calc_stats actually wrote.
+vector<string> buildColumnNames(param_t *params, bool DO_PARTITION) {
+	vector<string> names;
+	vector<int> PIK_CHOICE    = params->getIntListFlag(ARG_PIK);
+	vector<int> EHH_WINS      = params->getIntListFlag(ARG_EHH);
+	vector<int> EHHK_CHOICES  = params->getIntListFlag(ARG_EHHK);
+	vector<int> PARTITIONS    = params->getIntListFlag(ARG_PARTITION);
+	bool EHH_PART = params->getBoolFlag(ARG_EHH_PART);
+
+	//whole-window statistics, in STATS order
+	for (int j = 0; j < NOPTS; j++) {
+		if (STATS[j].compare(ARG_PI) == 0 && params->getBoolFlag(ARG_PI)) {
+			names.push_back("pi");
+		}
+		else if (STATS[j].compare(ARG_PIK) == 0 && PIK_CHOICE[0] != 0) {
+			for (unsigned int k = 0; k < PIK_CHOICE.size(); k++)
+				names.push_back("pi" + int2str(PIK_CHOICE[k]));
+		}
+		else if (STATS[j].compare(ARG_SEGSITES) == 0 && params->getBoolFlag(ARG_SEGSITES)) {
+			names.push_back("S");
+		}
+		else if (STATS[j].compare(ARG_EHH) == 0 && EHH_WINS[0] != 0) {
+			for (unsigned int w = 0; w < EHH_WINS.size(); w++)
+				names.push_back("ehh_" + int2str(EHH_WINS[w]));
+		}
+		else if (STATS[j].compare(ARG_EHHK) == 0 && EHHK_CHOICES[0] != 0) {
+			for (unsigned int w = 0; w < EHH_WINS.size(); w++)
+				for (unsigned int k = 0; k < EHHK_CHOICES.size(); k++)
+					names.push_back("ehh" + int2str(EHHK_CHOICES[k]) + "_" + int2str(EHH_WINS[w]));
+		}
+		else if (STATS[j].compare(ARG_TAJ_D) == 0 && params->getBoolFlag(ARG_TAJ_D)) {
+			names.push_back("D");
+		}
+		else if (STATS[j].compare(ARG_FAY_WU_H) == 0 && params->getBoolFlag(ARG_FAY_WU_H)) {
+			names.push_back("H");
+		}
+	}
+
+	//per-partition statistics, labelled A, B, C ... in partition order
+	if (DO_PARTITION) {
+		for (unsigned int p = 0; p < PARTITIONS.size(); p++) {
+			string partStr(1, (char)('A' + p));
+			for (int j = 0; j < NOPTS; j++) {
+				if (STATS[j].compare(ARG_PI) == 0 && params->getBoolFlag(ARG_PI)) {
+					names.push_back("pi_" + partStr);
+				}
+				else if (STATS[j].compare(ARG_PIK) == 0 && PIK_CHOICE[0] != 0) {
+					for (unsigned int k = 0; k < PIK_CHOICE.size(); k++)
+						names.push_back("pi" + int2str(PIK_CHOICE[k]) + "_" + partStr);
+				}
+				else if (STATS[j].compare(ARG_SEGSITES) == 0 && params->getBoolFlag(ARG_SEGSITES)) {
+					names.push_back("S_" + partStr);
+				}
+				else if (STATS[j].compare(ARG_TAJ_D) == 0 && params->getBoolFlag(ARG_TAJ_D)) {
+					names.push_back("D_" + partStr);
+				}
+				else if (STATS[j].compare(ARG_FAY_WU_H) == 0 && params->getBoolFlag(ARG_FAY_WU_H)) {
+					names.push_back("H_" + partStr);
+				}
+				else if (STATS[j].compare(ARG_EHH) == 0 && EHH_WINS[0] != 0 && EHH_PART) {
+					names.push_back("ehh_" + partStr);
+				}
+				else if (STATS[j].compare(ARG_EHHK) == 0 && EHHK_CHOICES[0] != 0 && EHH_PART) {
+					for (unsigned int k = 0; k < EHHK_CHOICES.size(); k++)
+						names.push_back("ehh" + int2str(EHHK_CHOICES[k]) + "_" + partStr);
+				}
+			}
+		}
+	}
+
+	return names;
+}
+
 void calc_stats(void *order) {
 	work_order_t *p = (work_order_t *)order;
 	HaplotypeData *hapData = p->hapData;
@@ -47,7 +131,6 @@ void calc_stats(void *order) {
 	double **results = p->results;
 	int id = p->id;
 	int numStats = p->numStats;
-	string *names = p->names;
 	vector<int> PIK_CHOICE = params->getIntListFlag(ARG_PIK);
 	vector<int> EHH_WINS = params->getIntListFlag(ARG_EHH);
 	vector<int> EHHK_CHOICES = params->getIntListFlag(ARG_EHHK);
@@ -93,7 +176,6 @@ void calc_stats(void *order) {
 		int s_S = MISSING;
 		for (int j = 0; j < NOPTS; j++) {
 			if (STATS[j].compare(ARG_PI) == 0 && params->getBoolFlag(ARG_PI)) {
-				if (i == 0) (*names) += "pi ";
 				results[i][s] = pi_from_sfs(sfs);
 				s_pi = s;
 				s++;
@@ -101,13 +183,11 @@ void calc_stats(void *order) {
 			else if (STATS[j].compare(ARG_PIK) == 0 && PIK_CHOICE[0] != 0) {
 				pik_hfs = hfs_window(hapData, snps);
 				for (int k = 0; k < PIK_CHOICE.size(); k++) {
-					if (i == 0) (*names) += "pi" + int2str(PIK_CHOICE[k]) + " ";
 					results[i][s] = pi_k2(pik_hfs, PIK_CHOICE[k]);
 					s++;
 				}
 			}
 			else if (STATS[j].compare(ARG_SEGSITES) == 0 && params->getBoolFlag(ARG_SEGSITES)) {
-				if (i == 0) (*names) += "S ";
 				results[i][s] = segsites(sfs);
 				s_S = s;
 				s++;
@@ -115,7 +195,6 @@ void calc_stats(void *order) {
 			else if (STATS[j].compare(ARG_EHH) == 0 && EHH_WINS[0] != 0) {
 				vector< pair_t* > *ehh_windows = getEHHWindows(snps->start, snps->winStart, WINSIZE, EHH_WINS, mapData, USE_BP);
 				for (int w = 0; w < ehh_windows->size(); w++) {
-					if (i == 0) (*names) += "ehh_" + int2str(EHH_WINS[w]) + " ";
 					hfs = hfs_window(hapData, ehh_windows->at(w));
 					results[i][s] = ehh_from_hfs(hfs);
 					s++;
@@ -128,7 +207,6 @@ void calc_stats(void *order) {
 				for (int w = 0; w < ehh_windows->size(); w++) {
 					hfs = hfs_window(hapData, ehh_windows->at(w));
 					for (int k = 0; k < EHHK_CHOICES.size(); k++) {
-						if (i == 0) (*names) += "ehh" + int2str(EHHK_CHOICES[k]) + "_" + int2str(EHH_WINS[w]) + " ";
 						results[i][s] = ehhk_from_hfs(hfs, EHHK_CHOICES[k]);
 						s++;
 					}
@@ -137,7 +215,6 @@ void calc_stats(void *order) {
 				releaseAllWindows(ehh_windows);
 			}
 			else if (STATS[j].compare(ARG_TAJ_D) == 0 && params->getBoolFlag(ARG_TAJ_D)) {
-				if (i == 0) (*names) += "D ";
 				if (s_pi >= 0 && s_S >= 0) results[i][s] = tajimaD_from_sfs(sfs, results[i][s_pi], results[i][s_S]);
 				else if (s_pi < 0 && s_S >= 0) results[i][s] = tajimaD_from_sfs(sfs, s_pi, results[i][s_S]);
 				else if (s_pi >= 0 && s_S < 0) results[i][s] = tajimaD_from_sfs(sfs, results[i][s_pi], s_S);
@@ -145,7 +222,6 @@ void calc_stats(void *order) {
 				s++;
 			}
 			else if (STATS[j].compare(ARG_FAY_WU_H) == 0 && params->getBoolFlag(ARG_FAY_WU_H)) {
-				if (i == 0) (*names) += "H ";
 				if (s_pi >= 0) results[i][s] = fayWuH_from_sfs(sfs, results[i][s_pi]);
 				else results[i][s] = fayWuH_from_sfs(sfs);
 				s++;
@@ -169,7 +245,6 @@ void calc_stats(void *order) {
 
 				for (int j = 0; j < NOPTS; j++) {
 					if (STATS[j].compare(ARG_PI) == 0 && params->getBoolFlag(ARG_PI)) {
-						if (i == 0) (*names) += "pi_" + partStr + " ";
 						results[i][s] = pi_from_sfs(partition_sfs);
 						s_pi0 = s;
 						s++;
@@ -179,20 +254,17 @@ void calc_stats(void *order) {
 						shifted_snps->start = partition_snps->start - snps->start;
 						shifted_snps->end = partition_snps->end - snps->start;
 						for (int k = 0; k < PIK_CHOICE.size(); k++) {
-							if (i == 0) (*names) += "pi" +  int2str(PIK_CHOICE[k]) + "_" + partStr + " ";
 							results[i][s] = pi_k2(pik_hfs, PIK_CHOICE[k], shifted_snps);
 							s++;
 						}
 						delete shifted_snps;
 					}
 					else if (STATS[j].compare(ARG_SEGSITES) == 0 && params->getBoolFlag(ARG_SEGSITES)) {
-						if (i == 0) (*names) += "S_" + partStr + " ";
 						results[i][s] = segsites(partition_sfs);
 						s_S0 = s;
 						s++;
 					}
 					else if (STATS[j].compare(ARG_TAJ_D) == 0 && params->getBoolFlag(ARG_TAJ_D)) {
-						if (i == 0) (*names) += "D_" + partStr + " ";
 						if (s_pi0 >= 0 && s_S0 >= 0) results[i][s] = tajimaD_from_sfs(partition_sfs, results[i][s_pi0], results[i][s_S0]);
 						else if (s_pi0 < 0 && s_S0 >= 0) results[i][s] = tajimaD_from_sfs(partition_sfs, s_pi0, results[i][s_S0]);
 						else if (s_pi0 >= 0 && s_S0 < 0) results[i][s] = tajimaD_from_sfs(partition_sfs, results[i][s_pi0], s_S0);
@@ -200,13 +272,11 @@ void calc_stats(void *order) {
 						s++;
 					}
 					else if (STATS[j].compare(ARG_FAY_WU_H) == 0 && params->getBoolFlag(ARG_FAY_WU_H)) {
-						if (i == 0) (*names) += "H_" + partStr + " ";
 						if (s_pi0 >= 0) results[i][s] = fayWuH_from_sfs(partition_sfs, results[i][s_pi0]);
 						else results[i][s] = fayWuH_from_sfs(partition_sfs);
 						s++;
 					}
 					else if (STATS[j].compare(ARG_EHH) == 0 && EHH_WINS[0] != 0 && params->getBoolFlag(ARG_EHH_PART)) {
-						if (i == 0) (*names) += "ehh_" + partStr + " ";
 						hfs = hfs_window(hapData, partition_snps);
 						results[i][s] = ehh_from_hfs(hfs);
 						s++;
@@ -216,7 +286,6 @@ void calc_stats(void *order) {
 
 						hfs = hfs_window(hapData, partition_snps);
 						for (int k = 0; k < EHHK_CHOICES.size(); k++) {
-							if (i == 0) (*names) += "ehh" + int2str(EHHK_CHOICES[k]) + "_" + partStr + " ";
 							results[i][s] = ehhk_from_hfs(hfs, EHHK_CHOICES[k]);
 							s++;
 						}
@@ -229,6 +298,16 @@ void calc_stats(void *order) {
 			}
 		}
 		releaseHaplotypeFrequencySpectrum(pik_hfs);
+
+		//The header is built independently in main, by buildColumnNames, from
+		//the same flags. If the two ever disagree the columns silently
+		//misalign with their names, so check rather than assume.
+		if (s != numStats) {
+			cerr << "ERROR: window " << i << " produced " << s
+			     << " statistics but the header declares " << numStats
+			     << "; buildColumnNames and calc_stats have drifted apart.\n";
+			throw 0;
+		}
 	}
 	return;
 }

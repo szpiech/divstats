@@ -19,7 +19,6 @@ struct work_order_t
 	vector< pair_t* > *windows;
 
     double **results;
-    string *names;
     //ofstream *flog;
     //Bar *bar;
 
@@ -38,6 +37,11 @@ void releaseAllWindows(vector< pair_t* > *windows);
 vector< pair_t* > *getPartitionWindows(int snpStart, int winStart, vector<int> &PARTITIONS, MapData *mapData, bool USE_BP);
 
 vector< pair_t* > *getEHHWindows(int snpStart, int winStart, int WINSIZE, vector<int> &EHH_WINS, MapData *mapData, bool USE_BP);
+
+//Output column names, in the order calc_stats fills results[][]. A pure
+//function of the command line, so main can write the header before any
+//thread starts.
+vector<string> buildColumnNames(param_t *params, bool DO_PARTITION);
 
 void calc_stats(void *work_order);
 

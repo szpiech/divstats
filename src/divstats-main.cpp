@@ -305,19 +305,17 @@ int main(int argc, char *argv[])
 
   vector< pair_t* > *windows = findAllWindows(mapData, WINSIZE, WINSTEP, USE_BP);
 
-  int numStats = (CALC_PI +
-                  CALC_PIK * PIK_CHOICE.size() +
-                  CALC_S +
-                  CALC_TAJ_D +
-                  CALC_FAY_WU_H) *
-                 (DO_PARTITION * PARTITIONS.size() + 1) +
-                 (EHH_PART + EHH_PART * CALC_EHHK * EHHK_CHOICES.size()) * (DO_PARTITION * PARTITIONS.size()) +
-                 (CALC_EHH * EHH_WINS.size() +
-                  CALC_EHHK * EHHK_CHOICES.size() * EHH_WINS.size());
+  //Column names and the column count both come from the command line, via one
+  //function that mirrors the order calc_stats fills results[][]. numStats used
+  //to be computed here by arithmetic replicating calc_stats' branch structure,
+  //and the names were accumulated inside a worker thread while it processed
+  //window 0 -- so a run with zero windows wrote a header with no statistic
+  //columns, and the two copies of the same knowledge could drift apart.
+  vector<string> colNames = buildColumnNames(&params, DO_PARTITION);
+  int numStats = (int)colNames.size();
 
   cerr << "Calculating " << numStats << " statistics in " << windows->size() << " windows.\n";
 
-  string names = "";
   double **results = new double*[windows->size()];
   for (int i = 0; i < windows->size(); i++) results[i] = new double[numStats];
 
@@ -337,7 +335,6 @@ int main(int argc, char *argv[])
     order->params = &params;
     order->results = results;
     order->windows = windows;
-    order->names = &names;
     order->DO_PARTITION = DO_PARTITION;
     order->USE_BP = USE_BP;
     order->SFS_SUB = SFS_SUB;
@@ -355,7 +352,13 @@ int main(int argc, char *argv[])
   delete [] peer;
 
 
-  fout << "chr\tstart\tend\tnbps\tnSNPs\t" << names << endl;
+  //Data rows are tab-separated, but the statistic names used to be joined with
+  //spaces and appended after a single tab -- so the header had 6 tab-delimited
+  //fields where the rows had 9, and both read.table(header=TRUE) and
+  //pandas.read_csv(sep='\t') mis-aligned. There was a trailing space too.
+  fout << "chr\tstart\tend\tnbps\tnSNPs";
+  for (unsigned int i = 0; i < colNames.size(); i++) fout << "\t" << colNames[i];
+  fout << "\n";
   for (int w = 0; w < windows->size(); w++) {
     fout << mapData->chr << "\t" 
       << windows->at(w)->winStart << "\t" 
