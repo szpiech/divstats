@@ -46,5 +46,10 @@ vector<string> buildColumnNames(param_t *params, bool DO_PARTITION);
 void calc_stats(void *work_order);
 
 string int2str(int i);
+string dbl2str(double d);
+
+//EHH subwindows placed by GENETIC distance: width is in map units, centred on
+//the genetic midpoint of the parent window. Requires a --map.
+vector< pair_t* > *getEHHWindowsGenetic(pair_t *parentWin, vector<double> &EHH_CM, MapData *mapData);
 
 #endif

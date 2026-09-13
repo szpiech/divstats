@@ -41,6 +41,19 @@ analysed incorrectly.
     --sites --winsize 100 --winstep 100     # 100 SNPs, tiling
     --bp --winsize 10000 --winstep 1000     # 10 kb, sliding
 
+### Genetic distance
+
+`--ehh` places its sub-windows by physical position, and does **not** need a
+genetic map — earlier versions required `--map` or `--pmap` for any EHH
+calculation and then ignored the map entirely. `--ehh-cm` is the placement that
+uses it: widths are in the map's own units (normally cM), so they are
+comparable between regions of differing recombination rate, and a fixed genetic
+width covers fewer base pairs inside a recombination hotspot.
+
+The two centre their sub-windows differently: `--ehh` on the window's
+coordinate midpoint, `--ehh-cm` on the genetic midpoint of the window's first
+and last SNP. `--ehh-cm` is not computed per partition.
+
 `--partition a b c` splits each window into sub-windows. The values are
 percentages under `--sites` and base pairs under `--bp`, and must sum to 100
 or to `--winsize` respectively.
@@ -54,8 +67,9 @@ or to `--winsize` respectively.
 | `--d` | `D` | Tajima's *D* |
 | `--h` | `H` | Fay & Wu's *H* |
 | `--pik k [k…]` | `pik` | π among the *k* most frequent haplotypes |
-| `--ehh w [w…]` | `ehh<w>` | EHH in sub-windows of *w* SNPs |
+| `--ehh w [w…]` | `ehh<w>` | EHH in sub-windows of *w* SNPs (`--sites`) or *w* bp (`--bp`) |
 | `--ehhk k w [w…]` | `ehhk<k>_<w>` | EHH among the *k* most frequent haplotypes |
+| `--ehh-cm w [w…]` | `ehhcm_<w>` | EHH in sub-windows *w* wide in genetic distance; requires `--map` |
 
 With `--partition`, each statistic also appears per partition, suffixed `_A`,
 `_B`, … in partition order.

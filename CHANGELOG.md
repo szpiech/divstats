@@ -128,10 +128,49 @@ moving by up to roughly 19% is the more representative headline.
   by throwing, but only command-line parsing was wrapped, so these aborted on
   SIGABRT (exit 134) after printing the error.
 
+### Added -- genetic distance
+
+- **`--ehh-cm w [w…]`** places EHH sub-windows by genetic distance, in the
+  map's own units. A fixed genetic width covers fewer base pairs where
+  recombination is high, so values are comparable between regions in a way a
+  width in base pairs is not. Columns are `ehhcm_<w>`. Not computed per
+  partition.
+- **`--ehh` no longer requires a genetic map.** It demanded `--map` or
+  `--pmap` for any EHH calculation and then placed its sub-windows by physical
+  position regardless, so the map was parsed, stored and never read -- users
+  produced a recombination map for a computation that ignored it. Physical
+  placement is now the default and `--ehh-cm` is the only consumer of
+  `geneticPos`. `--pmap` is kept but is only needed to force physical
+  placement while a map is loaded for something else, and is refused together
+  with `--ehh-cm`.
+
+### Fixed -- output and parsing
+
+- **Undefined statistics are `nan`, not `-999`.** A numeric sentinel is
+  absorbed by anything that averages a column. `--na-string` chooses the token
+  (`NA`, empty, or `-999` to reproduce 1.x).
+- **The header is tab-separated** like the data rows. It joined statistic names
+  with spaces, so the header had 6 tab-delimited fields where rows had 9 and
+  both `read.table(header=TRUE)` and `pandas.read_csv(sep='\t')` mis-aligned.
+- **The header no longer depends on a worker thread.** Column names were
+  appended while thread 0 processed window 0, so a run with zero windows wrote
+  a header with no statistic columns.
+- **SNPs sitting exactly on a window boundary are included.** With `--bp
+  --winsize 1000` and SNPs at 999, 1999, ... every window previously reported
+  zero SNPs.
+- **Tajima's D no longer divides 0 by 0** where a window has no segregating
+  sites.
+- **`--sweepfinder` reports the sample size observed at each site**, not the
+  full cohort size, and writes `<out>.sweepfinder.out` rather than stdout. It
+  is now documented in `--help`.
+- **Command-line parsing**: boolean flags are set rather than toggled; `""`,
+  `"-"` and `"."` are no longer accepted as numbers; integer overflow is
+  detected; and every bad flag is reported in one run instead of only the
+  first.
+
 ### Known issues carried forward
 
-- `--map` is required for EHH but the genetic map is never used in any
-  computation.
+
 - Output columns are undocumented, and the per-window effective sample size
   is not reported even though it varies with local missingness under the
   default subsampling.

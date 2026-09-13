@@ -138,11 +138,25 @@ const string HELP_CONST_N_SUB = "For SFS subsampling, use a constant samplesize 
 
 const string ARG_PMAP = "--pmap";
 const bool DEFAULT_PMAP = false;
-const string HELP_PMAP = "Use physical map instead of a genetic map.";
+const string HELP_PMAP = "Place EHH subwindows by physical distance. This is now the default\n\
+\twhen no --map is given, so the flag is only needed to force physical\n\
+\tplacement while a map is loaded for something else.";
+
+const string ARG_EHH_CM = "--ehh-cm";
+const double DEFAULT_EHH_CM = 0;
+const string HELP_EHH_CM = "A list of subwindow widths in GENETIC distance, in whatever units the\n\
+\t--map file uses (normally cM), within which to calculate EHH. Requires\n\
+\t--map. Subwindows are centred on the genetic midpoint of the current\n\
+\twindow. Unlike --ehh, whose values are SNP counts under --sites and\n\
+\tbase pairs under --bp, these widths are comparable between regions of\n\
+\tdiffering recombination rate. Decimals are expected: 1 cM is a very\n\
+\tlarge window.";
 
 
-#define NOPTS 7
+#define NOPTS 8
 
-const string STATS[NOPTS] = {ARG_PI, ARG_PIK, ARG_SEGSITES, ARG_EHH, ARG_EHHK, ARG_TAJ_D, ARG_FAY_WU_H};
+//Column order follows this array, not the order flags appear on the command
+//line. --ehh-cm sits next to the other EHH variants.
+const string STATS[NOPTS] = {ARG_PI, ARG_PIK, ARG_SEGSITES, ARG_EHH, ARG_EHHK, ARG_EHH_CM, ARG_TAJ_D, ARG_FAY_WU_H};
 
 #endif

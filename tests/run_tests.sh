@@ -102,10 +102,21 @@ build_fixtures() {
        > "$SCRATCH/hemi.vcf"
 
   # 4-column map: <chr> <locusID> <genetic pos> <physical pos>.
-  # Genetic position is a nominal 1 cM/Mb; divstats never reads it (the genetic
-  # map is parsed and ignored), but --ehh demands the file unless --pmap is set.
+  # Genetic position is a nominal 1 cM/Mb. Only --ehh-cm reads it; --ehh places
+  # its subwindows by physical position whether or not a map is loaded.
   awk '!/^#/ {printf "%s\tsnp%d\t%.6f\t%d\n", $1, ++n, $2/1000000.0, $2}' \
       "$SCRATCH/core.vcf" > "$SCRATCH/core.map"
+
+  # Same SNPs with a recombination hotspot: 1 cM/Mb outside [80kb,120kb] and
+  # 20 cM/Mb inside. A fixed GENETIC width therefore covers far fewer base
+  # pairs in the hotspot than the linear map does, which is the whole reason
+  # --ehh-cm exists. Against core.map the two placements agree.
+  awk '!/^#/ {p=$2; n++
+         if (p<=80000)       g = p/1000000.0
+         else if (p<=120000) g = 80000/1000000.0 + 20*(p-80000)/1000000.0
+         else                g = 80000/1000000.0 + 0.8 + (p-120000)/1000000.0
+         printf "%s\tsnp%d\t%.6f\t%d\n", $1, n, g, p}' \
+      "$SCRATCH/core.vcf" > "$SCRATCH/hotspot.map"
 
   # TPED + map, to cover the --tped reader at all.
   # Note the encoding difference: the VCF reader takes "." for a missing
@@ -306,6 +317,15 @@ define_case missing-nosub     table -- --vcf "$M" --sites --winsize 100 --winste
 define_case missing-constn    table -- --vcf "$M" --sites --winsize 100 --winstep 100 --pi --s --d --h --const-n-sub
 define_case ehh-pmap          table -- --vcf "$C" --sites --winsize 100 --winstep 100 --ehh 20 50 --pmap
 define_case ehh-mapfile       table -- --vcf "$C" --sites --winsize 100 --winstep 100 --ehh 20 50 --map "$SCRATCH/core.map"
+# EHH subwindows placed by genetic distance. The two cases run the SAME cM
+# width over the SAME SNPs, differing only in the map: core.map is linear at
+# 1 cM/Mb, hotspot.map is 20x that between 80kb and 120kb. Windows outside the
+# hotspot must agree between them and the hotspot window must not -- which is
+# what makes the genetic map load-bearing rather than parsed and ignored.
+define_case ehhcm-linear      table -- --vcf "$C" --bp --winsize 40000 --winstep 40000 --ehh-cm 0.02 --map "$SCRATCH/core.map"
+define_case ehhcm-hotspot     table -- --vcf "$C" --bp --winsize 40000 --winstep 40000 --ehh-cm 0.02 --map "$SCRATCH/hotspot.map"
+# --ehh no longer requires a map at all; this must equal ehh-pmap exactly.
+define_case ehh-nomap         table -- --vcf "$C" --sites --winsize 100 --winstep 100 --ehh 20 50
 define_case ehhk              table -- --vcf "$C" --sites --winsize 100 --winstep 100 --ehh 20 50 --ehhk 2 4 --pmap
 define_case pik               table -- --vcf "$C" --sites --winsize 50  --winstep 50  --pik 2
 # These two reach the pi_k2 path that used to read past the end of
@@ -349,7 +369,7 @@ define_case threads-4         table -- --vcf "$C" --sites --winsize 100 --winste
 # ===========================================================================
 
 golden_for() {   # thread-invariance shares sites-basic's golden
-  case "$1" in threads-4|bcf-basic) echo "sites-basic" ;; *) echo "$1" ;; esac
+  case "$1" in threads-4|bcf-basic) echo "sites-basic" ;; ehh-nomap) echo "ehh-pmap" ;; *) echo "$1" ;; esac
 }
 
 run_one() {
@@ -415,6 +435,7 @@ run_one() {
   if [ "$REGEN" = 1 ]; then
     case "$name" in
       threads-4|bcf-basic) printf "  ----  %-18s shares sites-basic golden\n" "$name"; return ;;
+      ehh-nomap)           printf "  ----  %-18s shares ehh-pmap golden\n" "$name"; return ;;
     esac
     mkdir -p "$EXPECTED"
     case "$kind" in

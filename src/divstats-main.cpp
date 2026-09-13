@@ -67,6 +67,7 @@ int main(int argc, char *argv[])
   params.addFlag(ARG_2_SWEEPFINDER, DEFAULT_2_SWEEPFINDER, "", HELP_2_SWEEPFINDER);
   params.addFlag(ARG_PMAP, DEFAULT_PMAP, "", HELP_PMAP);
   params.addFlag(ARG_NA_STRING, DEFAULT_NA_STRING, "", HELP_NA_STRING);
+  params.addListFlag(ARG_EHH_CM, DEFAULT_EHH_CM, "", HELP_EHH_CM);
   
   try {
     params.parseCommandLine(argc, argv);
@@ -180,7 +181,15 @@ int main(int argc, char *argv[])
   //DO_PARTITION is actually assigned. Checking it here tested DO_PARTITION
   //while it still held its initializer, so the flag could never be used.
 
-  bool NEED_GMAP = (CALC_EHHK || CALC_EHH || EHH_PART) && !PMAP;
+  vector<double> EHH_CM = params.getDoubleListFlag(ARG_EHH_CM);
+  bool CALC_EHH_CM = (EHH_CM[0] != 0);
+
+  //A genetic map is needed only by --ehh-cm, which is the only thing that
+  //reads geneticPos. EHH used to demand --map or --pmap and then place its
+  //subwindows by physical position regardless, so the map was parsed, stored
+  //and ignored -- users had to produce a recombination map to run a
+  //calculation that never consulted it.
+  bool NEED_GMAP = CALC_EHH_CM;
 
   if (numThreads <= 0) {
     cerr << "ERROR: Must specify a positive number of threads.\n";
@@ -197,9 +206,21 @@ int main(int argc, char *argv[])
     ERROR = true;
   }
 
-  if ( NEED_GMAP && !MAP ){
-    cerr << "ERROR: Must provide a mapfile or set --pmap.\n";
+  if ( CALC_EHH_CM && !MAP ){
+    cerr << "ERROR: --ehh-cm measures subwindows in genetic distance and needs --map.\n";
     ERROR = true;
+  }
+
+  if ( PMAP && CALC_EHH_CM ){
+    cerr << "ERROR: --pmap forces physical placement, which contradicts --ehh-cm.\n";
+    ERROR = true;
+  }
+
+  for (unsigned int i = 0; i < EHH_CM.size(); i++) {
+    if (CALC_EHH_CM && EHH_CM[i] <= 0) {
+      cerr << "ERROR: --ehh-cm widths must be > 0. Found " << EHH_CM[i] << ".\n";
+      ERROR = true;
+    }
   }
 
   int partitionTotalSize = 0;

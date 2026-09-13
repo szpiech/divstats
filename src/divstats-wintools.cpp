@@ -1,4 +1,5 @@
 #include "divstats-wintools.h"
+#include <cstdio>
 
 
 vector< pair_t* > *findAllWindows(MapData *mapData, int WINSIZE, int WINSTEP, bool USE_BP) {
@@ -54,6 +55,7 @@ vector<string> buildColumnNames(param_t *params, bool DO_PARTITION) {
 	vector<int> EHH_WINS      = params->getIntListFlag(ARG_EHH);
 	vector<int> EHHK_CHOICES  = params->getIntListFlag(ARG_EHHK);
 	vector<int> PARTITIONS    = params->getIntListFlag(ARG_PARTITION);
+	vector<double> EHH_CM     = params->getDoubleListFlag(ARG_EHH_CM);
 	bool EHH_PART = params->getBoolFlag(ARG_EHH_PART);
 
 	//whole-window statistics, in STATS order
@@ -76,6 +78,10 @@ vector<string> buildColumnNames(param_t *params, bool DO_PARTITION) {
 			for (unsigned int w = 0; w < EHH_WINS.size(); w++)
 				for (unsigned int k = 0; k < EHHK_CHOICES.size(); k++)
 					names.push_back("ehh" + int2str(EHHK_CHOICES[k]) + "_" + int2str(EHH_WINS[w]));
+		}
+		else if (STATS[j].compare(ARG_EHH_CM) == 0 && EHH_CM[0] != 0) {
+			for (unsigned int w = 0; w < EHH_CM.size(); w++)
+				names.push_back("ehhcm_" + dbl2str(EHH_CM[w]));
 		}
 		else if (STATS[j].compare(ARG_TAJ_D) == 0 && params->getBoolFlag(ARG_TAJ_D)) {
 			names.push_back("D");
@@ -135,6 +141,7 @@ void calc_stats(void *order) {
 	vector<int> EHH_WINS = params->getIntListFlag(ARG_EHH);
 	vector<int> EHHK_CHOICES = params->getIntListFlag(ARG_EHHK);
 	vector<int> PARTITIONS = params->getIntListFlag(ARG_PARTITION);
+		vector<double> EHH_CM = params->getDoubleListFlag(ARG_EHH_CM);
 	bool DO_PARTITION = p->DO_PARTITION;
 	bool USE_BP = p->USE_BP;
 	bool SFS_SUB = p->SFS_SUB;
@@ -213,6 +220,18 @@ void calc_stats(void *order) {
 					releaseHaplotypeFrequencySpectrum(hfs);
 				}
 				releaseAllWindows(ehh_windows);
+			}
+			else if (STATS[j].compare(ARG_EHH_CM) == 0 && EHH_CM[0] != 0) {
+				//subwindows measured in map units, centred on the parent
+				//window's genetic midpoint
+				vector< pair_t* > *cm_windows = getEHHWindowsGenetic(snps, EHH_CM, mapData);
+				for (unsigned int w = 0; w < cm_windows->size(); w++) {
+					hfs = hfs_window(hapData, cm_windows->at(w));
+					results[i][s] = ehh_from_hfs(hfs);
+					s++;
+					releaseHaplotypeFrequencySpectrum(hfs);
+				}
+				releaseAllWindows(cm_windows);
 			}
 			else if (STATS[j].compare(ARG_TAJ_D) == 0 && params->getBoolFlag(ARG_TAJ_D)) {
 				if (s_pi >= 0 && s_S >= 0) results[i][s] = tajimaD_from_sfs(sfs, results[i][s_pi], results[i][s_S]);
@@ -310,6 +329,63 @@ void calc_stats(void *order) {
 		}
 	}
 	return;
+}
+
+//EHH subwindows placed by GENETIC distance. The parent window's genetic
+//midpoint is the mean of its first and last SNP's map positions, and each
+//subwindow takes the SNPs within +/- width/2 of that point.
+//
+//This is the only thing in divstats that reads geneticPos. Before --ehh-cm,
+//a genetic map was mandatory for every EHH calculation and then never
+//consulted: subwindows were placed by physical position in both --sites and
+//--bp mode, so users produced a recombination map for a computation that
+//ignored it. Widths in map units are comparable between regions of differing
+//recombination rate, which a width in base pairs is not.
+vector< pair_t* > *getEHHWindowsGenetic(pair_t *parentWin, vector<double> &EHH_CM, MapData *mapData) {
+	vector< pair_t* > *ehh_windows = new vector< pair_t* >;
+	int numSnps = mapData->nloci;
+
+	for (unsigned int i = 0; i < EHH_CM.size(); i++) {
+		pair_t *snps = new pair_t;
+
+		//An empty parent window has no midpoint to centre on.
+		if (parentWin->end < parentWin->start) {
+			snps->start = parentWin->start;
+			snps->end = parentWin->start - 1;
+			snps->winStart = parentWin->winStart;
+			snps->winEnd = parentWin->winEnd;
+			ehh_windows->push_back(snps);
+			continue;
+		}
+
+		double mid = 0.5 * (mapData->geneticPos[parentWin->start] +
+		                    mapData->geneticPos[parentWin->end]);
+		double lo = mid - 0.5 * EHH_CM[i];
+		double hi = mid + 0.5 * EHH_CM[i];
+
+		//Clamp to the parent window: a subwindow may not reach outside it,
+		//matching the constraint --ehh already documents.
+		int a = parentWin->start;
+		while (a <= parentWin->end && mapData->geneticPos[a] < lo) a++;
+		int b = a;
+		while (b <= parentWin->end && b < numSnps && mapData->geneticPos[b] <= hi) b++;
+		b--;
+
+		snps->start = a;
+		snps->end = b;	//end < start means no SNP falls in the subwindow
+		snps->winStart = (b >= a) ? mapData->physicalPos[a] : parentWin->winStart;
+		snps->winEnd   = (b >= a) ? mapData->physicalPos[b] : parentWin->winEnd;
+		ehh_windows->push_back(snps);
+	}
+	return ehh_windows;
+}
+
+//%g gives the shortest round-trip-ish form, so 0.05 stays "0.05" and 1.0
+//becomes "1" -- stable column names without trailing zeros.
+string dbl2str(double d) {
+	char buf[32];
+	snprintf(buf, sizeof(buf), "%g", d);
+	return string(buf);
 }
 
 string int2str(int i) {
