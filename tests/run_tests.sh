@@ -281,6 +281,14 @@ define_case pik               table -- --vcf "$C" --sites --winsize 50  --winste
 # iteration and never overflows. Confirmed with ASan on the pre-fix build.
 define_case pik-narrow-window table -- --vcf "$C" --sites --winsize 10  --winstep 10  --pik 4
 define_case pik-multi-k       table -- --vcf "$C" --sites --winsize 50  --winstep 50  --pik 2 3 4 5 6 7 8
+# The three cases above only ever reach the tie-averaging branch with t=2,
+# m=1 -- the trivial tie, where one haplotype is drawn from a class of two.
+# Confirmed by instrumenting the branch with a counter. These two reach
+# t=4, m=2 and t=4, m=3, which is where the closed form's third term
+# (tied x tied pairs, coefficient m(m-1)/(t(t-1))) is actually nonzero.
+# Without them the closed form's interesting case would be uncovered.
+define_case pik-tie-m2        table -- --vcf "$C" --sites --winsize 200 --winstep 200 --pik 2
+define_case pik-tie-m3        table -- --vcf "$C" --sites --winsize 200 --winstep 200 --pik 3
 define_case partition-sites   table -- --vcf "$C" --sites --winsize 100 --winstep 100 --partition 25 50 25 --pi --s --d
 # --ehh-part was unreachable before the validation order was fixed (B7):
 # it was tested against DO_PARTITION before --partition had been parsed.

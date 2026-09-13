@@ -30,7 +30,9 @@ L_PATH = ../lib/macos-arm
 #L_PATH = ../lib/win32
 
 #For static linking of norm program to gsl libs
-LINK_OPTS = $(L_PATH)/libgsl.a $(L_PATH)/libgslcblas.a
+#GSL was needed only for gsl_combination, in the pi_k2 tie enumeration that
+#the closed form replaces. Nothing in the tree uses GSL now.
+LINK_OPTS =
 
 #Every object depends on every header. Over-broad but always correct: before
 #this, the .o rules had no header dependencies at all, so changing a header

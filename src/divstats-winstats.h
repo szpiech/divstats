@@ -24,7 +24,6 @@
 #include <vector>
 #include <cstdlib>
 #include "binom.h"
-#include <gsl/gsl_combination.h>
 
 int compare (const void *a, const void *b);
 int *uniqInt(int *array, int size, int &newSize);
