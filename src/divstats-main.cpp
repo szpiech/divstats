@@ -64,7 +64,7 @@ int main(int argc, char *argv[])
   params.addFlag(ARG_EHH_PART, DEFAULT_EHH_PART, "", HELP_EHH_PART);
   params.addFlag(ARG_NO_SFS_SUB, DEFAULT_NO_SFS_SUB, "", HELP_NO_SFS_SUB);
   params.addFlag(ARG_CONST_N_SUB, DEFAULT_CONST_N_SUB, "", HELP_CONST_N_SUB);
-  params.addFlag(ARG_2_SWEEPFINDER, DEFAULT_2_SWEEPFINDER, "SILENT", HELP_2_SWEEPFINDER);
+  params.addFlag(ARG_2_SWEEPFINDER, DEFAULT_2_SWEEPFINDER, "", HELP_2_SWEEPFINDER);
   params.addFlag(ARG_PMAP, DEFAULT_PMAP, "", HELP_PMAP);
   params.addFlag(ARG_NA_STRING, DEFAULT_NA_STRING, "", HELP_NA_STRING);
   
@@ -299,9 +299,39 @@ int main(int argc, char *argv[])
   freqData = initFreqData(hapData);
 
   if (SWEEPFINDER) {
-    cout << "position\tx\tn\tfolded\n";
+    //n is the number of haplotypes ACTUALLY OBSERVED at each site. This used
+    //to write freqData->nhaps -- the full sample size -- at every site,
+    //regardless of missing genotypes, so a site called in half the cohort was
+    //declared to SweepFinder2 as a full-depth observation. The derived count x
+    //was correct, so the reported frequency x/n was biased downwards by
+    //exactly the local missingness, and the likelihood surface with it.
+    //
+    //The file also went to stdout, which the banner and progress lines do not,
+    //so it could only be captured by redirecting a stream the program also
+    //uses for nothing else in this mode. It now goes to <out>.sweepfinder.out
+    //alongside the other output.
+    string sfFilename = outfileBase + ".sweepfinder.out";
+    ofstream sfout(sfFilename.c_str());
+    if (sfout.fail()) {
+      cerr << "ERROR: Failed to open " << sfFilename << " for writing.\n";
+      return 1;
+    }
+    cerr << "Writing SweepFinder2 input to " << sfFilename << "\n";
+
+    //folded is 0, i.e. the spectrum is unfolded and the ALT allele is assumed
+    //to be the derived one. divstats has no outgroup information, so this is
+    //an assumption about the input, not something it can verify.
+    sfout << "position\tx\tn\tfolded\n";
+    long nskipped = 0;
     for (int i = 0; i < freqData->nloci; i++) {
-      cout << mapData->physicalPos[i] << "\t" << freqData->count[i] << "\t" << freqData->nhaps << "\t0\n";
+      int n = freqData->nhaps - freqData->nmissing[i];
+      if (n <= 0) { nskipped++; continue; }   //no observed haplotype here
+      sfout << mapData->physicalPos[i] << "\t" << freqData->count[i]
+            << "\t" << n << "\t0\n";
+    }
+    sfout.close();
+    if (nskipped > 0) {
+      cerr << "Skipped " << nskipped << " site(s) with no called genotype.\n";
     }
     return 0;
   }

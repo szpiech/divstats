@@ -60,6 +60,16 @@ or to `--winsize` respectively.
 With `--partition`, each statistic also appears per partition, suffixed `_A`,
 `_B`, … in partition order.
 
+## SweepFinder2 export
+
+    --sweepfinder
+
+Writes `<out>.sweepfinder.out` (`position`, `x`, `n`, `folded`) and exits. `n`
+is the number of haplotypes observed at each site, so it varies with local
+missingness. `folded` is always 0, meaning the ALT allele is assumed to be
+derived — divstats has no outgroup and cannot check this. Sites with no called
+genotype are omitted.
+
 ## Missing data
 
 Per-site sample size varies with missingness, so windows are not directly

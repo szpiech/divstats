@@ -47,7 +47,11 @@ const string HELP_OUTFILE = "The basename for all output files.";
 
 const string ARG_2_SWEEPFINDER = "--sweepfinder";
 const bool DEFAULT_2_SWEEPFINDER = false;
-const string HELP_2_SWEEPFINDER = "Output in SweepFinder format.";
+const string HELP_2_SWEEPFINDER = "Write SweepFinder2 input to <out>.sweepfinder.out and exit.\n\
+\tColumns are position, derived count, haplotypes observed at that site,\n\
+\tand folded. folded is always 0, i.e. the ALT allele is assumed to be\n\
+\tthe derived one -- divstats has no outgroup and cannot verify this.\n\
+\tSites with no called genotype are omitted.";
 
 // Window control flags
 const string ARG_BP = "--bp";

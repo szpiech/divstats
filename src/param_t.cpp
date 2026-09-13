@@ -18,6 +18,8 @@
 #include "param_t.h"
 #include <cstdlib>
 #include <cstdio>
+#include <cerrno>
+#include <climits>
 
 using namespace std;
 
@@ -231,8 +233,11 @@ void param_t::printHelp()
 
 bool param_t::goodDouble(string str)
 {
+    //same holes as goodInt had: "", "-", "." and "-." all passed and became 0.
+    if (str.empty()) return 0;
+    if (str.find_first_of("0123456789") == string::npos) return 0;
+
     string::iterator it;
-    //int dashCount = 0;
     int decimalCount = 0;
     for (it = str.begin(); it != str.end(); it++)
     {
@@ -246,14 +251,26 @@ bool param_t::goodDouble(string str)
 
 bool param_t::goodInt(string str)
 {
+    //"" and "-" both used to pass. For the empty string the loop body never
+    //runs, and a lone '-' is a legal first character, so atoi returned 0 for
+    //both: `--winsize ""` silently became 0, reported downstream -- if at all
+    //-- as a bad window size rather than as a value that is not a number.
+    if (str.empty()) return 0;
+    if (str.size() == 1 && str[0] == '-') return 0;
+
     string::iterator it;
-    //int dashCount = 0;
     for (it = str.begin(); it != str.end(); it++)
     {
         if (!isdigit(*it) && *it != '-') return 0;
         if (*it == '-' && it != str.begin()) return 0;
-        //if (dashCount > 1) return 0;
     }
+
+    //atoi cannot report overflow, so a value past INT_MAX wrapped silently.
+    errno = 0;
+    char *end = NULL;
+    long v = strtol(str.c_str(), &end, 10);
+    if (errno == ERANGE || *end != '\0' || v > INT_MAX || v < INT_MIN) return 0;
+
     return 1;
 }
 
@@ -269,15 +286,25 @@ bool param_t::parseCommandLine(int argc, char *argv[])
 
     for (int i = 1; i < argc; i++)
     {
+        //Parsing used to stop at the first problem (`break`), so a command
+        //line with three mistakes had to be run four times to find them all.
+        //Each branch below now continues, skipping the offending value.
         if (isSet.count(argv[i]) > 0)
         {
             cerr << "ERROR: Duplicate " << argv[i] << " found.\n";
             badFlags++;
-            break;
+            continue;
         }
         else if (argb.count(argv[i]) > 0)
         {
-            argb[argv[i]] = !argb[argv[i]];
+            //Naming a flag SETS it. This used to negate the stored value, so a
+            //flag whose default was true would be turned OFF by passing it --
+            //the opposite of what every user expects. Every boolean default in
+            //divstats is currently false, which is why the two behaviours have
+            //been indistinguishable so far; the convention here for a
+            //default-on option is a separate --no-x flag (--no-sfs-sub), which
+            //this makes safe to add.
+            argb[argv[i]] = true;
             isSet[argv[i]] = true;
         }
         else if (argi.count(argv[i]) > 0)
@@ -286,13 +313,14 @@ bool param_t::parseCommandLine(int argc, char *argv[])
             {
                 cerr << "ERROR: No argument found for " << argv[i] << ".\n";
                 badFlags++;
-                break;
+                continue;
             }
             else if (!goodInt(string(argv[i + 1])))
             {
                 cerr << "ERROR: " << argv[i + 1] << " is not a valid integer.\n";
                 badFlags++;
-                break;
+                i++;   //skip the offending value so it is not read as a flag
+                continue;
             }
             else
             {
@@ -307,7 +335,7 @@ bool param_t::parseCommandLine(int argc, char *argv[])
             {
                 cerr << "ERROR: No argument found for " << argv[i] << ".\n";
                 badFlags++;
-                break;
+                continue;
             }
             else
             {
@@ -345,13 +373,14 @@ bool param_t::parseCommandLine(int argc, char *argv[])
             {
                 cerr << "ERROR: No argument found for " << argv[i] << ".\n";
                 badFlags++;
-                break;
+                continue;
             }
             else if (!goodDouble(string(argv[i + 1])))
             {
                 cerr << "ERROR: " << argv[i + 1] << " is not a valid double.\n";
                 badFlags++;
-                break;
+                i++;   //skip the offending value so it is not read as a flag
+                continue;
             }
             else
             {
@@ -366,7 +395,7 @@ bool param_t::parseCommandLine(int argc, char *argv[])
             {
                 cerr << "ERROR: No argument found for " << argv[i] << ".\n";
                 badFlags++;
-                break;
+                continue;
             }
             else
             {
@@ -404,7 +433,7 @@ bool param_t::parseCommandLine(int argc, char *argv[])
             {
                 cerr << "ERROR: No argument found for " << argv[i] << ".\n";
                 badFlags++;
-                break;
+                continue;
             }
             else
             {
@@ -419,7 +448,7 @@ bool param_t::parseCommandLine(int argc, char *argv[])
             {
                 cerr << "ERROR: No argument found for " << argv[i] << ".\n";
                 badFlags++;
-                break;
+                continue;
             }
             else
             {
@@ -450,7 +479,7 @@ bool param_t::parseCommandLine(int argc, char *argv[])
             {
                 cerr << "ERROR: No argument found for " << argv[i] << ".\n";
                 badFlags++;
-                break;
+                continue;
             }
             else if (!goodChar(string(argv[i + 1])))
             {
@@ -471,7 +500,7 @@ bool param_t::parseCommandLine(int argc, char *argv[])
             {
                 cerr << "ERROR: No argument found for " << argv[i] << ".\n";
                 badFlags++;
-                break;
+                continue;
             }
             else
             {

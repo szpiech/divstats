@@ -330,7 +330,11 @@ define_case ehh-part          table -- --vcf "$C" --sites --winsize 100 --winste
 define_case partition-bp      table -- --vcf "$C" --bp --winsize 200000 --winstep 200000 --partition 50000 100000 50000 --pi --s
 define_case tped-basic        table -- --tped "$SCRATCH/core.tped" --sites --winsize 100 --winstep 100 --pi --s --d --h
 define_case hemi              table -- --vcf "$H" --hemi --sites --winsize 100 --winstep 100 --pi --s --d --h
-define_case sweepfinder       stdout -- --vcf "$C" --sites --winsize 100 --winstep 100 --sweepfinder
+# --sweepfinder writes <out>.sweepfinder.out, and n is the number of
+# haplotypes observed AT EACH SITE. Run on the file with missing genotypes so
+# that n actually varies: against a build that writes the full sample size at
+# every site, every row of the n column differs.
+define_case sweepfinder       sweep -- --vcf "$M" --sites --winsize 100 --winstep 100 --sweepfinder
 # Thread invariance: compared against the SINGLE-THREADED sites-basic golden,
 # so this asserts a property (results independent of --threads), not just
 # self-consistency.
@@ -398,8 +402,9 @@ run_one() {
 
   local produced golden_path
   case "$kind" in
-    stdout) produced="$out.stdout";           golden_path="$EXPECTED/$gold.md5" ;;
-    *)      produced="$out.divstats.out";     golden_path="$EXPECTED/$gold.tsv.gz" ;;
+    stdout) produced="$out.stdout";            golden_path="$EXPECTED/$gold.md5" ;;
+    sweep)  produced="$out.sweepfinder.out";   golden_path="$EXPECTED/$gold.tsv.gz" ;;
+    *)      produced="$out.divstats.out";      golden_path="$EXPECTED/$gold.tsv.gz" ;;
   esac
 
   if [ ! -s "$produced" ]; then
