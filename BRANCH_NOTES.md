@@ -21,6 +21,14 @@ Run `make check` in `src/` after any change on this branch.
 | `fb68b0f` | **B6** fractional S truncated to int, and fed to Tajima's D | **yes** |
 | `cbc75df` | harness: nan counted as equal; cleanup trap deleted the repo | n/a |
 | `3a4d802` | **B5** subsampling weights in log space | **yes** |
+| `ed592ce` | these notes, rewritten with the measured deviations | n/a |
+| `100c335` | correct the overflow-threshold note in the large-n comment | n/a |
+
+For the count and anything added after the rows above, ask git rather than
+trusting this table:
+
+    git log --oneline devel..HEAD
+    git rev-list --count devel..HEAD
 
 `22e9170` carries changes that were uncommitted in the working tree when this
 branch was cut. To put them back on `devel` as uncommitted work instead:
