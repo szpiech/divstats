@@ -28,6 +28,13 @@ Run `make check` in `src/` after any change on this branch.
 | `7f2c81e` | **P3** project the SFS from nonzero bins only, 44x | no (bit-identical) |
 | `56a45d1` | **B3** closed-form tie averaging; drop GSL | no (bit-identical) |
 | `4ece3b6` | **BCF** + one-pass htslib reader; **B8 B9 B11 P1** | no (byte-identical) |
+| `9700233` | README, CHANGELOG, BRANCH_NOTES for 2.0.0 | n/a |
+| `8a48b0a` | **B13 B14** header built in main, tab-separated | header line only |
+| `671deae` | **B15 B16** undefined statistics are nan; guard D | `-999` -> `nan`, 69 values |
+| `1a6728a` | **B12** SNPs exactly on a window boundary | no golden moved |
+| `3f48fa7` | **B10 B19 U4** sweepfinder n and destination; parser | sweepfinder golden |
+| `6866ffe` | **B17** `--ehh-cm` genetic placement; `--ehh` drops the map | no (new columns only) |
+| `0183804` | **B18** `releaseHapData` never freed the struct | no |
 
 For the count and anything added after the rows above, ask git rather than
 trusting this table:
@@ -174,24 +181,48 @@ find out which paths a case reaches is to instrument and look.
 
 ## Next, in order
 
-1. **B10-B19 cleanup pass** -- `--sweepfinder` reports the full sample size at
-   every site regardless of missing data and writes to stdout rather than the
-   `--out` basename; the last SNP can be dropped by an off-by-one in
-   `findInclusiveSNPIndicies`; `-999` is emitted as a numeric missing value;
-   Tajima's D has no guard at S = 0; several `param_t` defects (boolean flags
-   toggle rather than set, duplicate list flags silently keep the last).
-2. **U5, U6** -- the two interface items that decide whether output can be
-   interpreted later: document the output columns (partly done in README) and
-   report the per-window effective sample size, which varies with local
-   missingness under the default subsampling and is currently invisible.
-3. **B17** -- `--map` is required for EHH but `geneticPos` is read by nothing.
-   Either drop the requirement or place EHH sub-windows in cM as the flag
-   implies.
-4. **U1, U2, U3, U7** -- usage on bare invocation, grouped `--help`,
-   `--version`, progress reporting on long runs.
-5. **P11** -- 2-bit genotype packing, only if cohort-scale runs are a target.
-   One byte per allele is 20 MB at 400 x 50,000 but ~20 GB at
-   2,000 haplotypes x 10M SNPs, and packing turns Hamming distance into a
-   popcount.
+Every bug in the review is now fixed (19 of 19). What remains is performance
+and interface.
+
+1. **P8, P4, P5, P9, P10** -- the cheap, local, low-risk performance items:
+   hoist the per-window flag lookups out of the loop (which also removes the
+   unsynchronised `getBoolFlag` calls from the worker threads), compute each
+   EHH sub-window's spectrum once instead of twice across `--ehh`/`--ehhk`,
+   build haplotype strings with one `assign` instead of per-character appends,
+   count uniques in the pass that already exists, and stop flushing output
+   once per row.
+2. **P2, P6, P7** -- `hamming_dist_str` takes both strings by value and is
+   called from the O(k^2) inner loops; the map lookups in those loops are
+   O(log n) tree walks with O(L) string comparisons per pair.
+3. **U1, U2, U3, U7** -- usage on bare invocation, grouped `--help`,
+   `--version`, progress reporting on long runs. `--help` is currently an
+   alphabetical dump in `std::map` order with no usage line and no examples.
+4. **U6** -- report the per-window effective sample size. Under the default
+   subsampling it varies with local missingness, so pi, D and H are not
+   comparable across windows, and n is not in the output.
+5. **U9, U10, U11** -- output precision flag; a Makefile keyed on `uname`
+   rather than commented blocks; and the stale `.o` files and result files
+   still checked in.
+6. **P11** -- 2-bit genotype packing, only if cohort-scale runs are a target.
 
 Full list and measurements in the review report.
+
+## Two places where verification changed the answer
+
+Worth keeping because in both cases the first result was wrong in the
+reassuring direction.
+
+**A guard that cannot fire.** The radicand check added next to Tajima's D
+looked like it was catching a real nan. Computing `e1` and `e2` over
+n = 4..5000 showed `e1 > e2` throughout, so the radicand is positive for any
+S; at n = 2 and 3 both coefficients are exactly 0, but pi == S/a1 identically
+there, so the answer is nan either way. Instrumenting the branch over ~15,000
+fractional-S evaluations reached it zero times. The guard stays, but the
+comment now says it is defensive rather than claiming a fix -- the first
+version of that comment asserted the opposite and was wrong.
+
+**A sanitizer that was not running.** The `releaseHapData` leak fix appeared
+to be confirmed by AddressSanitizer reporting no leak. It was not: LSan does
+not run on macOS arm64, and a control program with a deliberate leak produced
+no report either. The fix rests on inspection and on matching the other three
+release functions. Re-check on Linux with `detect_leaks=1`.
