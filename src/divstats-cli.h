@@ -1,7 +1,12 @@
 #ifndef __DIVSTATS_CLI_H__
 #define __DIVSTATS_CLI_H__
 
-const string VERSION = "1.0.0";
+//2.0.0 rather than 1.1.0: pi, S, Tajima's D and Fay & Wu's H all changed
+//value on data with missing genotypes (see CHANGELOG.md). For a tool whose
+//interface IS its numbers, that is a breaking change, and a major version is
+//the only signal strong enough to stop someone pooling 1.0.0 and 2.0.0
+//output in one analysis.
+const string VERSION = "2.0.0";
 
 const string PREAMBLE = "";
 
