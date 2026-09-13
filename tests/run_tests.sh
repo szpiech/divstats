@@ -241,6 +241,17 @@ H="$SCRATCH/hemi.vcf.gz"
 # projection from n+1 chromosomes. This case is the arithmetic check on the
 # subsampler; the numbers above are independent of the implementation.
 define_case subsample-toy     table -- --vcf "$HERE/data/subsample-toy.vcf.gz" --sites --winsize 6 --winstep 6 --pi --s --d
+# 1200 haplotypes, 5% missing. The old weights formed each binomial
+# coefficient separately, and it is the PRODUCT nCk(i,j)*nCk(n-i,H-j) that
+# overflows first -- two mid-range coefficients near C(600,300) ~ 1e179
+# multiply to inf long before C(n,H) itself is large. inf/inf is nan, so every
+# SFS statistic came back nan on this fixture. 1040 haplotypes at 1% missing
+# does NOT trigger it (H sits close to n, so the coefficients stay small):
+# the fixture needs enough missingness to push the bins toward the middle.
+# Threshold is platform-dependent -- with 80-bit long double it is far higher
+# -- so on x86-64 this case guards the arithmetic without having reproduced
+# the original failure.
+define_case large-n-subsample table -- --vcf "$HERE/data/large-n.vcf.gz" --sites --winsize 20 --winstep 20 --pi --s --d --h
 define_case sites-basic       table -- --vcf "$C" --sites --winsize 100 --winstep 100 --pi --s --d --h
 define_case sites-pi-only     table -- --vcf "$C" --sites --winsize 100 --winstep 100 --pi
 define_case sites-sliding     table -- --vcf "$C" --sites --winsize 100 --winstep 25  --pi --s --d --h

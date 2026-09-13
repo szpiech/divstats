@@ -476,11 +476,30 @@ double pi_window(HaplotypeData * hapData, pair_t* snpIndex) {
 //n-1, which is what "i < sfs->size - 1" did. Writing "i < n-1" after
 //correcting n silently drops the top segregating class -- verified to lose a
 //whole site's worth of mass on a fixture with a site at c == n-1.
+//The weight is a RATIO of binomial coefficients, so it is computed in log
+//space. Forming the coefficients individually had two consequences:
+//
+// - Overflow. It is the PRODUCT nCk(i,j)*nCk(n-i,H-j) that overflows first:
+//   two mid-range coefficients near C(600,300) ~ 1e179 multiply to inf long
+//   before C(n,H) itself is large, and inf/inf is nan. Every SFS-based
+//   statistic came back nan for large cohorts with missing data -- at
+//   1200 haplotypes with 5% missing, all of pi, S, D and H were nan. The
+//   threshold is platform-dependent, so this appeared on some machines and
+//   not others.
+//
+// - Phantom probability mass. nCk rounds, and outside the hypergeometric
+//   support it can return 1 where the true coefficient is 0 (see binom.cpp).
+//   Those spurious weights invented sites: on one 100-site test window the
+//   projected SFS summed to 101.65, and the 1.65 excess was traceable to a
+//   single nCk(1,2) evaluating to 1. lnCk returns -infinity there, so
+//   exp() gives an exact zero and the projection conserves mass.
 double subsample_sfs(array_t *sfs, int H, int j){
    double res = 0;
    int n = sfs->size - 1;
+   long double lnDenom = lnCk(n, H);
+   if (!std::isfinite((double)lnDenom)) return res;   //H outside 0..n
    for (int i = j; i < n; i++){
-      res += sfs->data[i] * nCk(i,j)*nCk(n-i,H-j)/nCk(n,H);
+      res += sfs->data[i] * (double)expl(lnCk(i,j) + lnCk(n-i,H-j) - lnDenom);
    }
    return res;
 }
