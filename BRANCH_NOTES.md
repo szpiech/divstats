@@ -23,6 +23,11 @@ Run `make check` in `src/` after any change on this branch.
 | `3a4d802` | **B5** subsampling weights in log space | **yes** |
 | `ed592ce` | these notes, rewritten with the measured deviations | n/a |
 | `100c335` | correct the overflow-threshold note in the large-n comment | n/a |
+| `8fb6226` | complete the commit table in these notes | n/a |
+| `9e61816` | bump to 2.0.0, add CHANGELOG | n/a |
+| `7f2c81e` | **P3** project the SFS from nonzero bins only, 44x | no (bit-identical) |
+| `56a45d1` | **B3** closed-form tie averaging; drop GSL | no (bit-identical) |
+| `4ece3b6` | **BCF** + one-pass htslib reader; **B8 B9 B11 P1** | no (byte-identical) |
 
 For the count and anything added after the rows above, ask git rather than
 trusting this table:
@@ -138,29 +143,55 @@ registered for deletion, the resolved path must match
 other path. If you run the suite and it exits 2 complaining about the scratch
 directory, that guard is doing its job — check `TMPDIR`.
 
+## Performance, measured
+
+Each change was checked for output equivalence before its speed was recorded.
+
+| change | effect | equivalence |
+|---|---|---|
+| P3 sparse SFS projection | subsampling cost above baseline 12.23 s -> 0.28 s (44x); total 13.31 s -> 1.36 s (9.8x) | bit-identical; suite passes at `--rtol 1e-15`, `cmp` clean over 500 windows |
+| B3 closed-form tie averaging | `--pik 5` on 40 haplotypes, 10 windows: 10.09 s -> 0.063 s; flat in k | identical output at every k tested |
+| P1 one-pass htslib reader | parse-dominated run 1.02 s -> 0.40 s (2.6x) | byte-identical over 500 windows; all 25 prior goldens unchanged |
+
+P3's implementation deliberately differs from what the review proposed. The
+review called for caching the weight matrix per `(n,H)`; `H` is the
+per-window minimum sample size, so it varies window to window and the key
+space is the product of observed `n` and `H` values. At 1200 haplotypes each
+matrix is ~11 MB, so a few hundred live pairs would reach gigabytes. Skipping
+empty input bins gives a comparable speedup with no memory growth.
+
+## A coverage gap worth remembering
+
+The three `pik` cases all reached the tie-averaging branch only with
+`t=2, m=1` -- one haplotype drawn from a class of two -- which was
+established by instrumenting the branch with a counter, not assumed. In that
+trivial case the closed form's third term has coefficient zero, so the
+byte-identical results the suite reported said nothing about it.
+`pik-tie-m2` and `pik-tie-m3` were added to reach `t=4, m=2` and `t=4, m=3`.
+The general lesson matches the one from the `nan` comparator hole: a passing
+test says nothing about a path it does not execute, and the cheapest way to
+find out which paths a case reaches is to instrument and look.
+
 ## Next, in order
 
-1. **B8/B9** — multi-chromosome input is silently merged into one coordinate
-   space and labelled with the last chromosome seen; unsorted positions are
-   silently accepted. Both should abort with a diagnostic. Neither changes
-   output for well-formed single-chromosome input, so they can land before
-   the performance work.
-2. **P3** — cache the hypergeometric weight matrix per `(n, H)`. It depends
-   only on the pair, not on the window or the data, and the subsampling path
-   currently costs about 800x the statistics it feeds (32.9 s against
-   0.041 s on 500 windows of 400 haplotypes). This should leave every number
-   identical, and it removes the hot path that makes `factln`'s unsynchronised
-   memo table worth having.
-3. **B3** — closed-form tie averaging in `pi_k2`, replacing exhaustive
-   `C(t,m)` enumeration. `--pik k` is currently intractable for k >= 3
-   (54 s for 10 windows at 400 haplotypes). The closed form was verified
-   against exhaustive enumeration to 9e-13, so values should be identical to
-   floating point.
-4. **P1** — one-pass VCF reader. Parsing is about 95% of a typical run and
-   roughly 4.5x slower than necessary (0.96 s against 0.214 s for a
-   one-pass reference reader on the same file).
+1. **B10-B19 cleanup pass** -- `--sweepfinder` reports the full sample size at
+   every site regardless of missing data and writes to stdout rather than the
+   `--out` basename; the last SNP can be dropped by an off-by-one in
+   `findInclusiveSNPIndicies`; `-999` is emitted as a numeric missing value;
+   Tajima's D has no guard at S = 0; several `param_t` defects (boolean flags
+   toggle rather than set, duplicate list flags silently keep the last).
+2. **U5, U6** -- the two interface items that decide whether output can be
+   interpreted later: document the output columns (partly done in README) and
+   report the per-window effective sample size, which varies with local
+   missingness under the default subsampling and is currently invisible.
+3. **B17** -- `--map` is required for EHH but `geneticPos` is read by nothing.
+   Either drop the requirement or place EHH sub-windows in cM as the flag
+   implies.
+4. **U1, U2, U3, U7** -- usage on bare invocation, grouped `--help`,
+   `--version`, progress reporting on long runs.
+5. **P11** -- 2-bit genotype packing, only if cohort-scale runs are a target.
+   One byte per allele is 20 MB at 400 x 50,000 but ~20 GB at
+   2,000 haplotypes x 10M SNPs, and packing turns Hamming distance into a
+   popcount.
 
-Then the remaining interface items, of which **U5** (undocumented output
-columns) and **U6** (effective per-window sample size not reported) are the
-two that affect whether output can be interpreted later. Full list and
-measurements in the review report.
+Full list and measurements in the review report.

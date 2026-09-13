@@ -91,13 +91,45 @@ moving by up to roughly 19% is the more representative headline.
   committed inputs, so it runs in a fresh clone; `test/` and `testing/` are
   untracked and absent from clones.
 
+### Added -- input formats and performance
+
+- **BCF support**, plus a single-pass reader. VCF, bgzipped VCF and BCF now
+  read through htslib, which detects the format from the file itself. The old
+  pair of functions read every input four times -- each counted records, closed
+  the file and reopened it, and the map pass re-parsed CHROM and POS off lines
+  the genotype pass had already read. Parsing is about 2.6x faster
+  (1.02 s -> 0.40 s on 50,000 sites x 400 haplotypes) with byte-identical
+  output. `GT` may now sit anywhere in `FORMAT`; it was previously assumed to
+  be first, and `FORMAT=DP:GT` failed with a misleading allele-coding error.
+- **Multi-chromosome and unsorted input are refused**, naming the offending
+  record, instead of being analysed incorrectly.
+- **Subsampling is about 44x cheaper.** The projection evaluated a weight for
+  every input frequency bin, almost all of which are empty; it now visits only
+  the bins that hold sites, which makes the cost independent of sample size.
+  On 500 windows of 400 haplotypes with 2% missing data, the subsampling cost
+  above the no-subsampling baseline falls from 12.23 s to 0.28 s -- total
+  runtime 13.31 s to 1.36 s. Output is bit-identical.
+- **`--pik k` is now usable for k >= 3.** Tie averaging enumerated every
+  C(t,m) choice of tied haplotypes, which is intractable when most haplotypes
+  in a window are unique. It has a closed form, so the cost no longer depends
+  on k: on 40 haplotypes over 10 windows, k=5 goes from 10.09 s to 0.063 s,
+  with identical output.
+
+### Changed -- build
+
+- **GSL is no longer required.** `gsl_combination` was its only use, in the
+  tie enumeration the closed form replaces. 52 MB of vendored static libraries
+  and 1.4 MB of headers are gone from the repository.
+- **htslib is vendored** in its place (4.5 MB), configured without
+  bzip2/lzma/libcurl/libdeflate so it needs nothing beyond the zlib divstats
+  already linked. Only `lib/macos-arm/libhts.a` is committed;
+  `lib/build_htslib.sh` reproduces it for other platforms.
+- Malformed input now exits 1 with its diagnostic. The readers signal failure
+  by throwing, but only command-line parsing was wrapped, so these aborted on
+  SIGABRT (exit 134) after printing the error.
+
 ### Known issues carried forward
 
-- Multi-chromosome input is silently merged into a single coordinate space
-  and every row is labelled with the last chromosome seen.
-- Unsorted positions are silently accepted and produce wrong windows.
-- `--pik k` is intractable for `k >= 3` on realistic data, because tie
-  averaging enumerates every `C(t,m)` combination.
 - `--map` is required for EHH but the genetic map is never used in any
   computation.
 - Output columns are undocumented, and the per-window effective sample size
