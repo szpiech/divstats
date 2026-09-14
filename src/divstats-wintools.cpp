@@ -158,14 +158,24 @@ void calc_stats(void *order) {
 	pair_t *snps = NULL, *partition_snps = NULL;
 
 
-	bool NEED_SFS = false;
-	//Do we need to calculate the SFS for every window?
-	for (int j = 0; j < NOPTS; j++){
-		if (STATS[j].compare(ARG_PI) == 0 && params->getBoolFlag(ARG_PI)) NEED_SFS = true;
-		else if (STATS[j].compare(ARG_SEGSITES) == 0 && params->getBoolFlag(ARG_SEGSITES)) NEED_SFS = true;
-		else if (STATS[j].compare(ARG_TAJ_D) == 0 && params->getBoolFlag(ARG_TAJ_D)) NEED_SFS = true;
-		else if (STATS[j].compare(ARG_FAY_WU_H) == 0 && params->getBoolFlag(ARG_FAY_WU_H)) NEED_SFS = true;
-	}
+	//Which statistics are switched on. These were read from params INSIDE the
+	//per-window loop -- windows x NOPTS lookups into a std::map<string,...>
+	//keyed on strings, each an O(log n) walk with string comparisons at every
+	//node. Worse, params is shared by every worker thread and getBoolFlag is a
+	//non-const member, so the threads were all calling into the same container
+	//concurrently for the whole run. Read once here, before any thread reaches
+	//the loop, and the map is never touched again.
+	bool CALC_PI   = params->getBoolFlag(ARG_PI);
+	bool CALC_S    = params->getBoolFlag(ARG_SEGSITES);
+	bool CALC_D    = params->getBoolFlag(ARG_TAJ_D);
+	bool CALC_H    = params->getBoolFlag(ARG_FAY_WU_H);
+	bool EHH_PART  = params->getBoolFlag(ARG_EHH_PART);
+	bool DO_PIK    = (PIK_CHOICE[0]    != 0);
+	bool DO_EHH    = (EHH_WINS[0]      != 0);
+	bool DO_EHHK   = (EHHK_CHOICES[0]  != 0);
+	bool DO_EHHCM  = (EHH_CM[0]        != 0);
+
+	bool NEED_SFS = (CALC_PI || CALC_S || CALC_D || CALC_H);
 
 	//Cycle over all windows and calculate stats
 	for (int i = id; i < windows->size(); i += numThreads) {
@@ -185,24 +195,24 @@ void calc_stats(void *order) {
 		//useful for calculating Taj's D or F&W's H
 		int s_S = MISSING;
 		for (int j = 0; j < NOPTS; j++) {
-			if (STATS[j].compare(ARG_PI) == 0 && params->getBoolFlag(ARG_PI)) {
+			if (STATS[j].compare(ARG_PI) == 0 && CALC_PI) {
 				results[i][s] = pi_from_sfs(sfs);
 				s_pi = s;
 				s++;
 			}
-			else if (STATS[j].compare(ARG_PIK) == 0 && PIK_CHOICE[0] != 0) {
+			else if (STATS[j].compare(ARG_PIK) == 0 && DO_PIK) {
 				pik_hfs = hfs_window(hapData, snps);
 				for (int k = 0; k < PIK_CHOICE.size(); k++) {
 					results[i][s] = pi_k2(pik_hfs, PIK_CHOICE[k]);
 					s++;
 				}
 			}
-			else if (STATS[j].compare(ARG_SEGSITES) == 0 && params->getBoolFlag(ARG_SEGSITES)) {
+			else if (STATS[j].compare(ARG_SEGSITES) == 0 && CALC_S) {
 				results[i][s] = segsites(sfs);
 				s_S = s;
 				s++;
 			}
-			else if (STATS[j].compare(ARG_EHH) == 0 && EHH_WINS[0] != 0) {
+			else if (STATS[j].compare(ARG_EHH) == 0 && DO_EHH) {
 				vector< pair_t* > *ehh_windows = getEHHWindows(snps->start, snps->winStart, WINSIZE, EHH_WINS, mapData, USE_BP);
 				for (int w = 0; w < ehh_windows->size(); w++) {
 					hfs = hfs_window(hapData, ehh_windows->at(w));
@@ -212,7 +222,7 @@ void calc_stats(void *order) {
 				}
 				releaseAllWindows(ehh_windows);
 			}
-			else if (STATS[j].compare(ARG_EHHK) == 0 && EHHK_CHOICES[0] != 0) {
+			else if (STATS[j].compare(ARG_EHHK) == 0 && DO_EHHK) {
 				vector< pair_t* > *ehh_windows = getEHHWindows(snps->start, snps->winStart, WINSIZE, EHH_WINS, mapData, USE_BP);
 				for (int w = 0; w < ehh_windows->size(); w++) {
 					hfs = hfs_window(hapData, ehh_windows->at(w));
@@ -224,7 +234,7 @@ void calc_stats(void *order) {
 				}
 				releaseAllWindows(ehh_windows);
 			}
-			else if (STATS[j].compare(ARG_EHH_CM) == 0 && EHH_CM[0] != 0) {
+			else if (STATS[j].compare(ARG_EHH_CM) == 0 && DO_EHHCM) {
 				//subwindows measured in map units, centred on the parent
 				//window's genetic midpoint
 				vector< pair_t* > *cm_windows = getEHHWindowsGenetic(snps, EHH_CM, mapData);
@@ -236,14 +246,14 @@ void calc_stats(void *order) {
 				}
 				releaseAllWindows(cm_windows);
 			}
-			else if (STATS[j].compare(ARG_TAJ_D) == 0 && params->getBoolFlag(ARG_TAJ_D)) {
+			else if (STATS[j].compare(ARG_TAJ_D) == 0 && CALC_D) {
 				if (s_pi >= 0 && s_S >= 0) results[i][s] = tajimaD_from_sfs(sfs, results[i][s_pi], results[i][s_S]);
 				else if (s_pi < 0 && s_S >= 0) results[i][s] = tajimaD_from_sfs(sfs, s_pi, results[i][s_S]);
 				else if (s_pi >= 0 && s_S < 0) results[i][s] = tajimaD_from_sfs(sfs, results[i][s_pi], s_S);
 				else results[i][s] = tajimaD_from_sfs(sfs);
 				s++;
 			}
-			else if (STATS[j].compare(ARG_FAY_WU_H) == 0 && params->getBoolFlag(ARG_FAY_WU_H)) {
+			else if (STATS[j].compare(ARG_FAY_WU_H) == 0 && CALC_H) {
 				if (s_pi >= 0) results[i][s] = fayWuH_from_sfs(sfs, results[i][s_pi]);
 				else results[i][s] = fayWuH_from_sfs(sfs);
 				s++;
@@ -266,12 +276,12 @@ void calc_stats(void *order) {
 				if (NEED_SFS) partition_sfs = sfs_window(freqData, partition_snps, SFS_SUB, TARGET_N);
 
 				for (int j = 0; j < NOPTS; j++) {
-					if (STATS[j].compare(ARG_PI) == 0 && params->getBoolFlag(ARG_PI)) {
+					if (STATS[j].compare(ARG_PI) == 0 && CALC_PI) {
 						results[i][s] = pi_from_sfs(partition_sfs);
 						s_pi0 = s;
 						s++;
 					}
-					else if (STATS[j].compare(ARG_PIK) == 0 && PIK_CHOICE[0] != 0) {
+					else if (STATS[j].compare(ARG_PIK) == 0 && DO_PIK) {
 						pair_t *shifted_snps = new pair_t;
 						shifted_snps->start = partition_snps->start - snps->start;
 						shifted_snps->end = partition_snps->end - snps->start;
@@ -281,30 +291,30 @@ void calc_stats(void *order) {
 						}
 						delete shifted_snps;
 					}
-					else if (STATS[j].compare(ARG_SEGSITES) == 0 && params->getBoolFlag(ARG_SEGSITES)) {
+					else if (STATS[j].compare(ARG_SEGSITES) == 0 && CALC_S) {
 						results[i][s] = segsites(partition_sfs);
 						s_S0 = s;
 						s++;
 					}
-					else if (STATS[j].compare(ARG_TAJ_D) == 0 && params->getBoolFlag(ARG_TAJ_D)) {
+					else if (STATS[j].compare(ARG_TAJ_D) == 0 && CALC_D) {
 						if (s_pi0 >= 0 && s_S0 >= 0) results[i][s] = tajimaD_from_sfs(partition_sfs, results[i][s_pi0], results[i][s_S0]);
 						else if (s_pi0 < 0 && s_S0 >= 0) results[i][s] = tajimaD_from_sfs(partition_sfs, s_pi0, results[i][s_S0]);
 						else if (s_pi0 >= 0 && s_S0 < 0) results[i][s] = tajimaD_from_sfs(partition_sfs, results[i][s_pi0], s_S0);
 						else results[i][s] = tajimaD_from_sfs(partition_sfs);
 						s++;
 					}
-					else if (STATS[j].compare(ARG_FAY_WU_H) == 0 && params->getBoolFlag(ARG_FAY_WU_H)) {
+					else if (STATS[j].compare(ARG_FAY_WU_H) == 0 && CALC_H) {
 						if (s_pi0 >= 0) results[i][s] = fayWuH_from_sfs(partition_sfs, results[i][s_pi0]);
 						else results[i][s] = fayWuH_from_sfs(partition_sfs);
 						s++;
 					}
-					else if (STATS[j].compare(ARG_EHH) == 0 && EHH_WINS[0] != 0 && params->getBoolFlag(ARG_EHH_PART)) {
+					else if (STATS[j].compare(ARG_EHH) == 0 && DO_EHH && EHH_PART) {
 						hfs = hfs_window(hapData, partition_snps);
 						results[i][s] = ehh_from_hfs(hfs);
 						s++;
 						releaseHaplotypeFrequencySpectrum(hfs);
 					}
-					else if (STATS[j].compare(ARG_EHHK) == 0 && EHHK_CHOICES[0] != 0 && params->getBoolFlag(ARG_EHH_PART)) {
+					else if (STATS[j].compare(ARG_EHHK) == 0 && DO_EHHK && EHH_PART) {
 
 						hfs = hfs_window(hapData, partition_snps);
 						for (int k = 0; k < EHHK_CHOICES.size(); k++) {
