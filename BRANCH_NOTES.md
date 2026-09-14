@@ -45,6 +45,7 @@ Run `make check` in `src/` after any change on this branch.
 | `c4d0251` | Tajima's D undefined below one expected segregating site | yes, D only |
 | `573c70d` | **U1 U2 U7** grouped `--help`, usage on bare run, progress | no (byte-identical) |
 | `48f8b15` | **U10** platform-detecting Makefile; warning-free build | no (byte-identical) |
+| `a5de078` | **U5 U9** `<out>.divstats.log` sidecar; `--precision` | no (byte-identical) |
 
 For the count and anything added after the rows above, ask git rather than
 trusting this table:
