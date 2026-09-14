@@ -16,6 +16,7 @@
    Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301  USA
 */
 #include "divstats-winstats.h"
+#include <cstring>
 
 int hamming_dist_ptr(short *one, short *two, int length)
 {
@@ -385,36 +386,24 @@ HaplotypeFrequencySpectrum *hfs_window(HaplotypeData * hapData, pair_t* snpIndex
 
    HaplotypeFrequencySpectrum *hfs = initHaplotypeFrequencySpectrum();
 
-   bool skip = false;
-   //Generate haplotypes and populate hap2count
+   //Generate haplotypes and populate hap2count.
+   //
+   //This appended one character at a time -- length operator+= calls per
+   //haplotype per window, each with a capacity check and possible
+   //reallocation. The alleles are already contiguous in hapData->data[hap],
+   //so the window is one memchr to find a missing allele and one memcpy to
+   //copy the range. A haplotype containing any missing allele is skipped, as
+   //before, so memchr decides that without a per-character loop.
+   const int length = snpIndex->end - snpIndex->start + 1;
+   string haplotype;
    for (int hap = 0; hap < hapData->nhaps; hap++) {
-      string haplotype;
+      const char *row = hapData->data[hap] + snpIndex->start;
+      if (memchr(row, MISSING_ALLELE, length) != NULL) continue;
 
-      for (int site = snpIndex->start; site <= snpIndex->end; site++) {
-         if (hapData->data[hap][site] == MISSING_ALLELE){
-            skip = true;
-            break;
-         }
-         if (site == snpIndex->start) {
-            //haplotypeList[hap] = data[hap][site];
-            haplotype = hapData->data[hap][site];
-         }
-         else {
-            //haplotypeList[hap] += data[hap][site];
-            haplotype += hapData->data[hap][site];
-         }
-      }
-      if (!skip){
-         if (hfs->hap2count.count(haplotype) == 0) {
-            hfs->hap2count[haplotype] = 1;
-         }
-         else {
-            hfs->hap2count[haplotype]++;
-         }
-      }
-      else{
-         skip = false;
-      }
+      haplotype.assign(row, length);
+      map<string, int>::iterator hit = hfs->hap2count.find(haplotype);
+      if (hit == hfs->hap2count.end()) hfs->hap2count[haplotype] = 1;
+      else hit->second++;
    }
 
    if(hfs->hap2count.size() == 0) return NULL;
