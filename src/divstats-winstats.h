@@ -30,7 +30,8 @@ int *uniqInt(int *array, int size, int &newSize);
 
 double subsample_sfs(array_t *sfs, int H, int j);
 void project_sfs(array_t *sub, int H, array_t *out);
-array_t *sfs_window(FreqData *freqData, pair_t* snpIndex, bool SFS_SUB, bool CONST_N);
+array_t *sfs_window(FreqData *freqData, pair_t* snpIndex, bool SFS_SUB, int TARGET_N,
+                    int *nhapsUsedOut = NULL, int *nSitesUsedOut = NULL);
 HaplotypeFrequencySpectrum *hfs_window(HaplotypeData *hapData, pair_t* snpIndex);
 
 double pi_window(HaplotypeData *hapData, pair_t* snpIndex);

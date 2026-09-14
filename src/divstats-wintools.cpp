@@ -145,7 +145,9 @@ void calc_stats(void *order) {
 	bool DO_PARTITION = p->DO_PARTITION;
 	bool USE_BP = p->USE_BP;
 	bool SFS_SUB = p->SFS_SUB;
-	bool CONST_N = params->getBoolFlag(ARG_CONST_N_SUB);
+	int TARGET_N = p->TARGET_N;
+	int *nhapsUsed = p->nhapsUsed;
+	int *nSitesUsed = p->nSitesUsed;
 
 	int numThreads = params->getIntFlag(ARG_THREADS);
 	//These must be initialized: each is assigned only inside a conditional
@@ -175,7 +177,8 @@ void calc_stats(void *order) {
 		pik_hfs = NULL;
 		partition_sfs = NULL;
 
-		if (NEED_SFS) sfs = sfs_window(freqData, snps, SFS_SUB, CONST_N);
+		if (NEED_SFS) sfs = sfs_window(freqData, snps, SFS_SUB, TARGET_N, &nhapsUsed[i], &nSitesUsed[i]);
+		else { nhapsUsed[i] = freqData->nhaps; nSitesUsed[i] = numSitesInDataWin(snps); }
 
 		int s = 0;
 		int s_pi = MISSING; //note storage location of pi if it exists
@@ -260,7 +263,7 @@ void calc_stats(void *order) {
 				string partStr(part);
 				partition_snps = partition_windows->at(p);
 				partition_sfs = NULL;
-				if (NEED_SFS) partition_sfs = sfs_window(freqData, partition_snps, SFS_SUB, CONST_N);
+				if (NEED_SFS) partition_sfs = sfs_window(freqData, partition_snps, SFS_SUB, TARGET_N);
 
 				for (int j = 0; j < NOPTS; j++) {
 					if (STATS[j].compare(ARG_PI) == 0 && params->getBoolFlag(ARG_PI)) {

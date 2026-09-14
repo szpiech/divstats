@@ -6,6 +6,10 @@ Computes nucleotide diversity, segregating sites, Tajima's *D*, Fay & Wu's
 *H*, extended haplotype homozygosity and *k*-haplotype variants of π and EHH,
 in windows defined either by a number of SNPs or by physical distance.
 
+## Version
+
+    divstats --version        # prints e.g. 2.0.0 on stdout, exits 0
+
 ## Build
 
     cd src && make
@@ -83,6 +87,35 @@ is the number of haplotypes observed at each site, so it varies with local
 missingness. `folded` is always 0, meaning the ALT allele is assumed to be
 derived — divstats has no outgroup and cannot check this. Sites with no called
 genotype are omitted.
+
+## Sample size
+
+Every window's spectrum is projected to **one sample size shared by the whole
+run**, reported in the `nhaps` column. Before 2.0.0 each window was projected
+to its own minimum observed sample size, so `n` varied with local missingness
+and π, S, *D* and *H* were not comparable between windows — and `n` was not in
+the output, so nothing downstream could detect it.
+
+The default is the largest `n` every site in the file can reach
+(`nhaps - maxMissing`), which excludes no site. That value is set by the single
+worst-covered site, so on real data it can sit far below the typical site:
+
+    Projecting every window to n = 168 haplotypes (50000 of 50000 sites usable,
+      the largest n that excludes no site).
+      raising it would cost sites:  n=367 keeps 99.9% of sites; set with --target-n.
+
+`--target-n N` projects to `N` instead and excludes sites observed in fewer
+than `N` haplotypes — they cannot be projected upward. The number that actually
+contributed appears in an `nSNPsUsed` column, which is emitted only when
+`--target-n` is given.
+
+`--window-n-sub` restores the pre-2.0.0 per-window minimum. It maximises each
+window's `n` in isolation, but the windows are then not comparable.
+`--const-n-sub` is accepted and does nothing; it is the default.
+
+With `--no-sfs-sub` nothing is projected and `nhaps` reports the full sample
+size. For statistics that do not use the spectrum (EHH and its variants),
+`nhaps` is likewise the full sample size, since those use every haplotype.
 
 ## Missing data
 

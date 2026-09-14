@@ -26,11 +26,25 @@
 #include "divstats-cli.h"
 
 #include <cmath>
+#include <algorithm>
 
 using namespace std;
 
 int main(int argc, char *argv[])
 {
+  //--version is handled before anything else, and before the banner, so that
+  //`divstats --version` writes exactly one line to STDOUT and exits 0. The
+  //version was previously only reachable in the stderr banner, mixed in with
+  //progress output, which conda recipes and pipeline version-capture cannot
+  //use. Checked here rather than through param_t because it must not require
+  //the rest of a valid command line.
+  for (int i = 1; i < argc; i++) {
+    if (string(argv[i]) == ARG_VERSION) {
+      cout << VERSION << "\n";
+      return 0;
+    }
+  }
+
   cerr << "divstats v" + VERSION + "\n";
   param_t params;
   params.setPreamble(PREAMBLE);
@@ -67,6 +81,9 @@ int main(int argc, char *argv[])
   params.addFlag(ARG_2_SWEEPFINDER, DEFAULT_2_SWEEPFINDER, "", HELP_2_SWEEPFINDER);
   params.addFlag(ARG_PMAP, DEFAULT_PMAP, "", HELP_PMAP);
   params.addFlag(ARG_NA_STRING, DEFAULT_NA_STRING, "", HELP_NA_STRING);
+  params.addFlag(ARG_VERSION, DEFAULT_VERSION, "", HELP_VERSION);
+  params.addFlag(ARG_TARGET_N, DEFAULT_TARGET_N, "", HELP_TARGET_N);
+  params.addFlag(ARG_WINDOW_N_SUB, DEFAULT_WINDOW_N_SUB, "", HELP_WINDOW_N_SUB);
   params.addListFlag(ARG_EHH_CM, DEFAULT_EHH_CM, "", HELP_EHH_CM);
   
   try {
@@ -319,6 +336,79 @@ int main(int argc, char *argv[])
   }
   freqData = initFreqData(hapData);
 
+  //---- resolve the sample size the whole run will project to -------------
+  //Before 2.0.0 each window was projected to its own minimum observed sample
+  //size, so n varied from window to window with local missingness and pi, S,
+  //D and H were not comparable between windows -- with n absent from the
+  //output, nothing downstream could even detect it. One value is now chosen
+  //for the entire run.
+  //
+  //The default is the largest n every site can reach, nhaps - maxMissing,
+  //which discards no site. That value is set by the single worst-covered site
+  //in the file, so on real data it can be far below the typical site's n; the
+  //report below shows what raising it with --target-n would cost in sites, so
+  //the trade is visible rather than buried.
+  int TARGET_N = params.getIntFlag(ARG_TARGET_N);
+  bool WINDOW_N = params.getBoolFlag(ARG_WINDOW_N_SUB);
+  bool TARGET_N_EXPLICIT = (TARGET_N > 0);
+  int globalMaxN = freqData->nhaps - freqData->maxMissing;
+
+  if (WINDOW_N && TARGET_N_EXPLICIT) {
+    cerr << "ERROR: --window-n-sub and --target-n choose the sample size differently.\n";
+    return 1;
+  }
+  if (WINDOW_N) {
+    TARGET_N = 0;   //per-window minimum
+  }
+  else if (!TARGET_N_EXPLICIT) {
+    TARGET_N = globalMaxN;
+  }
+
+  if (SFS_SUB && !WINDOW_N) {
+    if (TARGET_N > freqData->nhaps) {
+      cerr << "ERROR: --target-n " << TARGET_N << " exceeds the " << freqData->nhaps
+           << " haplotypes in the data.\n";
+      return 1;
+    }
+    long usable = 0;
+    for (int i = 0; i < freqData->nloci; i++) {
+      if (freqData->nhaps - freqData->nmissing[i] >= TARGET_N) usable++;
+    }
+    cerr << "Projecting every window to n = " << TARGET_N << " haplotypes ("
+         << usable << " of " << freqData->nloci << " sites usable"
+         << (TARGET_N_EXPLICIT ? "" : ", the largest n that excludes no site") << ").\n";
+
+    if (!TARGET_N_EXPLICIT && freqData->nloci > 0) {
+      //What would a slightly higher n cost? Sort the per-site sample sizes and
+      //read off the n reachable by 99.9%, 99% and 95% of sites. If one bad
+      //site is holding the whole run down this makes it obvious immediately.
+      vector<int> perSite(freqData->nloci);
+      for (int i = 0; i < freqData->nloci; i++) perSite[i] = freqData->nhaps - freqData->nmissing[i];
+      sort(perSite.begin(), perSite.end());
+      const double keep[3] = {0.999, 0.99, 0.95};
+      bool worth = false;
+      int lastN = -1;
+      string line = "  raising it would cost sites:";
+      for (int k = 0; k < 3; k++) {
+        int idx = (int)((1.0 - keep[k]) * freqData->nloci);
+        if (idx >= freqData->nloci) idx = freqData->nloci - 1;
+        int n_k = perSite[idx];
+        if (n_k > TARGET_N && n_k != lastN) {
+          worth = true;
+          lastN = n_k;
+          char buf[96];
+          snprintf(buf, sizeof(buf), "  n=%d keeps %.1f%% of sites;", n_k, 100.0 * keep[k]);
+          line += buf;
+        }
+      }
+      if (worth) cerr << line << " set with --target-n.\n";
+    }
+  }
+  else if (WINDOW_N) {
+    cerr << "Projecting each window to its own minimum sample size; "
+         << "windows are NOT comparable.\n";
+  }
+
   if (SWEEPFINDER) {
     //n is the number of haplotypes ACTUALLY OBSERVED at each site. This used
     //to write freqData->nhaps -- the full sample size -- at every site,
@@ -371,6 +461,11 @@ int main(int argc, char *argv[])
   string NA_STRING = params.getStringFlag(ARG_NA_STRING);
   cerr << "Calculating " << numStats << " statistics in " << windows->size() << " windows.\n";
 
+  //per-window sample size actually used, and the number of sites that fed the
+  //spectrum -- the two things U6 says the output must carry if windows are to
+  //be interpreted at all
+  int *nhapsUsed  = new int[windows->size()];
+  int *nSitesUsed = new int[windows->size()];
   double **results = new double*[windows->size()];
   for (int i = 0; i < windows->size(); i++) results[i] = new double[numStats];
 
@@ -382,6 +477,9 @@ int main(int argc, char *argv[])
     order = new work_order_t;
     order->id = i;
     order->numStats = numStats;
+    order->TARGET_N = TARGET_N;
+    order->nhapsUsed = nhapsUsed;
+    order->nSitesUsed = nSitesUsed;
     order->hapData = hapData;
     order->mapData = mapData;
     order->freqData = freqData;
@@ -405,13 +503,20 @@ int main(int argc, char *argv[])
   }
 
   delete [] peer;
+  //nhapsUsed/nSitesUsed are freed after the write loop below
 
 
   //Data rows are tab-separated, but the statistic names used to be joined with
   //spaces and appended after a single tab -- so the header had 6 tab-delimited
   //fields where the rows had 9, and both read.table(header=TRUE) and
   //pandas.read_csv(sep='\t') mis-aligned. There was a trailing space too.
-  fout << "chr\tstart\tend\tnbps\tnSNPs";
+  //nhaps is the sample size the window's statistics refer to. Without it,
+  //output from different runs -- or from before 2.0.0, where it varied by
+  //window -- cannot be told apart or pooled safely. nSNPsUsed appears only
+  //when --target-n was given explicitly, because that is the only setting
+  //that can exclude sites: the default target is reachable by every site.
+  fout << "chr\tstart\tend\tnbps\tnSNPs\tnhaps";
+  if (TARGET_N_EXPLICIT) fout << "\tnSNPsUsed";
   for (unsigned int i = 0; i < colNames.size(); i++) fout << "\t" << colNames[i];
   fout << "\n";
   for (int w = 0; w < windows->size(); w++) {
@@ -419,7 +524,9 @@ int main(int argc, char *argv[])
       << windows->at(w)->winStart << "\t" 
       << windows->at(w)->winEnd << "\t"
       << windows->at(w)->winEnd - windows->at(w)->winStart + 1 << "\t"
-      << windows->at(w)->end - windows->at(w)->start + 1;
+      << windows->at(w)->end - windows->at(w)->start + 1
+      << "\t" << nhapsUsed[w];
+    if (TARGET_N_EXPLICIT) fout << "\t" << nSitesUsed[w];
     for (int s = 0; s < numStats; s++) {
       //An undefined statistic is NaN internally; what reaches the file is the
       //--na-string token. The default, "nan", is what iostream would print
@@ -432,6 +539,8 @@ int main(int argc, char *argv[])
   }
 
   fout.close();
+  delete [] nhapsUsed;
+  delete [] nSitesUsed;
 
   releaseHapData(hapData);
   releaseMapData(mapData);

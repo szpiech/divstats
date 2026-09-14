@@ -314,7 +314,16 @@ define_case bp-basic          table -- --vcf "$C" --bp --winsize 200000 --winste
 define_case bp-sliding        table -- --vcf "$C" --bp --winsize 200000 --winstep 50000 --pi --s
 define_case missing-default   table -- --vcf "$M" --sites --winsize 100 --winstep 100 --pi --s --d --h
 define_case missing-nosub     table -- --vcf "$M" --sites --winsize 100 --winstep 100 --pi --s --d --h --no-sfs-sub
+# --const-n-sub is a no-op from 2.0.0: a constant n across windows is the
+# default. Sharing missing-default's golden is the assertion -- if the flag
+# ever starts doing something again, this fails.
 define_case missing-constn    table -- --vcf "$M" --sites --winsize 100 --winstep 100 --pi --s --d --h --const-n-sub
+# The pre-2.0.0 sampling: each window projected to its own minimum, so nhaps
+# varies between windows and the statistics are not comparable across them.
+define_case window-n-sub      table -- --vcf "$M" --sites --winsize 100 --winstep 100 --pi --s --d --h --window-n-sub
+# An explicit target above the global minimum. Sites too sparse to reach it are
+# excluded, which is what nSNPsUsed reports -- a column that appears only here.
+define_case target-n          table -- --vcf "$M" --sites --winsize 100 --winstep 100 --pi --s --d --h --target-n 14
 define_case ehh-pmap          table -- --vcf "$C" --sites --winsize 100 --winstep 100 --ehh 20 50 --pmap
 define_case ehh-mapfile       table -- --vcf "$C" --sites --winsize 100 --winstep 100 --ehh 20 50 --map "$SCRATCH/core.map"
 # EHH subwindows placed by genetic distance. The two cases run the SAME cM
@@ -369,7 +378,7 @@ define_case threads-4         table -- --vcf "$C" --sites --winsize 100 --winste
 # ===========================================================================
 
 golden_for() {   # thread-invariance shares sites-basic's golden
-  case "$1" in threads-4|bcf-basic) echo "sites-basic" ;; ehh-nomap) echo "ehh-pmap" ;; *) echo "$1" ;; esac
+  case "$1" in threads-4|bcf-basic) echo "sites-basic" ;; ehh-nomap) echo "ehh-pmap" ;; missing-constn) echo "missing-default" ;; *) echo "$1" ;; esac
 }
 
 run_one() {
@@ -436,6 +445,7 @@ run_one() {
     case "$name" in
       threads-4|bcf-basic) printf "  ----  %-18s shares sites-basic golden\n" "$name"; return ;;
       ehh-nomap)           printf "  ----  %-18s shares ehh-pmap golden\n" "$name"; return ;;
+      missing-constn)      printf "  ----  %-18s shares missing-default golden\n" "$name"; return ;;
     esac
     mkdir -p "$EXPECTED"
     case "$kind" in

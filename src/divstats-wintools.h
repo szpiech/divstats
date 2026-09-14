@@ -27,6 +27,11 @@ struct work_order_t
     bool DO_PARTITION;
     bool USE_BP;
     bool SFS_SUB;
+    int TARGET_N;            //0 = each window's own minimum
+
+    //per-window metadata, filled by calc_stats and written by main
+    int *nhapsUsed;
+    int *nSitesUsed;
 };
 
 pair_t* findInclusiveSNPIndicies(int startSnpIndex, int currWinStart, int WINSIZE, MapData* mapData);

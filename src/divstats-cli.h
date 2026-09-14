@@ -34,6 +34,26 @@ const string ARG_HEMI = "--hemi";
 const bool DEFAULT_HEMI = false;
 const string HELP_HEMI = "Input data is hemizygous (e.g. chrY).";
 
+const string ARG_TARGET_N = "--target-n";
+const int DEFAULT_TARGET_N = 0;
+const string HELP_TARGET_N = "Project every window's spectrum to exactly this many haplotypes.\n\
+\tSites observed in fewer than this are excluded (they cannot be\n\
+\tprojected upward), and the count that contributed is reported in the\n\
+\tnSNPsUsed column. The default is the largest n every site in the file\n\
+\tcan reach, which excludes nothing but is set by the single worst\n\
+\tcovered site; the startup message reports what raising it would cost.";
+
+const string ARG_WINDOW_N_SUB = "--window-n-sub";
+const bool DEFAULT_WINDOW_N_SUB = false;
+const string HELP_WINDOW_N_SUB = "Project each window to ITS OWN minimum sample size rather than to one\n\
+\tvalue shared by the whole run. Maximises each window's n in isolation,\n\
+\tbut n then varies with local missingness and pi, S, D and H are NOT\n\
+\tcomparable between windows. This was the default before 2.0.0.";
+
+const string ARG_VERSION = "--version";
+const bool DEFAULT_VERSION = false;
+const string HELP_VERSION = "Print the version to stdout and exit.";
+
 const string ARG_NA_STRING = "--na-string";
 const string DEFAULT_NA_STRING = "nan";
 const string HELP_NA_STRING = "Token written for statistics that are undefined in a window\n\
@@ -132,9 +152,9 @@ sfs-based statistics substantially.";
 
 const string ARG_CONST_N_SUB = "--const-n-sub";
 const bool DEFAULT_CONST_N_SUB = false;
-const string HELP_CONST_N_SUB = "For SFS subsampling, use a constant samplesize (n) equal to the\n\
-\tsample size at the locus with the most missing data for all windows. Without this flag, windows\n\
-\tmay have different sample sizes based on the amount of missing data within each window.";
+const string HELP_CONST_N_SUB = "Accepted for compatibility and does nothing: a constant sample size\n\
+\tacross windows is the default from 2.0.0. Use --window-n-sub for the\n\
+\tprevious per-window behaviour, or --target-n to choose the value.";
 
 const string ARG_PMAP = "--pmap";
 const bool DEFAULT_PMAP = false;

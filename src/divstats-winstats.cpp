@@ -567,32 +567,69 @@ void project_sfs(array_t *sub, int H, array_t *out){
    }
 }
 
-array_t *sfs_window(FreqData * freqData, pair_t* snpIndex, bool SFS_SUB, bool CONST_N) {
+//TARGET_N selects how many haplotypes the window's spectrum is projected to:
+//
+//  TARGET_N > 0   project every site down to exactly TARGET_N. Sites observed
+//                 in fewer than TARGET_N haplotypes cannot be projected up and
+//                 are EXCLUDED. main resolves this once for the whole run, so
+//                 every window shares one n and the statistics are comparable
+//                 between windows -- which they were not when the target was
+//                 each window's own minimum, since that varies with local
+//                 missingness.
+//  TARGET_N == 0  use this window's own minimum observed sample size (the old
+//                 default, reachable with --window-n-sub). Maximises the n of
+//                 each window in isolation; the windows are not comparable.
+//
+//nhapsUsedOut receives the n the spectrum ends up on and nSitesUsedOut the
+//number of sites that contributed, which differs from the window's site count
+//only when TARGET_N excluded some. Both may be NULL.
+array_t *sfs_window(FreqData * freqData, pair_t* snpIndex, bool SFS_SUB, int TARGET_N,
+                    int *nhapsUsedOut, int *nSitesUsedOut) {
+   if (nhapsUsedOut != NULL) *nhapsUsedOut = 0;
+   if (nSitesUsedOut != NULL) *nSitesUsedOut = 0;
    if (numSitesInDataWin(snpIndex) <= 0) return NULL;
    int nTargetHaps = freqData->nhaps;
-   //cerr << "Calculating sfs across " << freqData->nhaps << " haps.\n";
-   vector<int> nhaps;
+   vector<int> nhaps;      //per-site observed sample size, sites we will use
+   vector<int> siteIdx;    //their absolute indices, kept in step with nhaps
    int n;
    if(SFS_SUB){
-      for (int i = snpIndex->start; i <= snpIndex->end; i++){
-         n = freqData->nhaps - freqData->nmissing[i];
-         nhaps.push_back(n);
-         if (nTargetHaps > n){
-            nTargetHaps = n;            
+      if (TARGET_N > 0){
+         nTargetHaps = TARGET_N;
+         for (int i = snpIndex->start; i <= snpIndex->end; i++){
+            n = freqData->nhaps - freqData->nmissing[i];
+            if (n < TARGET_N) continue;   //cannot project upward
+            nhaps.push_back(n);
+            siteIdx.push_back(i);
+         }
+         //every site in the window is too sparse for the requested n
+         if (nhaps.size() == 0) return NULL;
+      }
+      else{
+         for (int i = snpIndex->start; i <= snpIndex->end; i++){
+            n = freqData->nhaps - freqData->nmissing[i];
+            nhaps.push_back(n);
+            siteIdx.push_back(i);
+            if (nTargetHaps > n){
+               nTargetHaps = n;
+            }
          }
       }
-      if(CONST_N) nTargetHaps = freqData->nhaps - freqData->maxMissing;
+   }
+
+   if (nhapsUsedOut != NULL) *nhapsUsedOut = nTargetHaps;
+   if (nSitesUsedOut != NULL) {
+      *nSitesUsedOut = SFS_SUB ? (int)nhaps.size() : numSitesInDataWin(snpIndex);
    }
 
    array_t *sfs = initArray(nTargetHaps + 1);
-   
+
    if (nTargetHaps != freqData->nhaps){
       array_t *s;
       map<int,array_t*> multiSFS;
       int j;
       for (int i = 0; i < nhaps.size(); i++){
          n = nhaps[i];
-         j = i + snpIndex->start;
+         j = siteIdx[i];
          if (multiSFS.count(n) == 0) multiSFS[n] = initArray(n + 1);
          multiSFS[n]->data[freqData->count[j]]++;
       }

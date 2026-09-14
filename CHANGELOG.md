@@ -144,6 +144,30 @@ moving by up to roughly 19% is the more representative headline.
   placement while a map is loaded for something else, and is refused together
   with `--ehh-cm`.
 
+### Changed -- one sample size for the whole run
+
+- **Windows are now comparable.** Each window used to be projected to its own
+  minimum observed sample size, so `n` varied with local missingness while the
+  output gave no way to tell. Every window is now projected to a single `n`,
+  and that `n` is reported in a new **`nhaps`** column. This changes π, S, *D*
+  and *H* for any input with missing genotypes -- on the test fixture,
+  74 of 200 windows move at `--winsize 2`, by up to a factor of 2.5 where the
+  old per-window `n` happened to be high.
+- The default `n` is the largest every site can reach, which excludes nothing.
+  Because one badly-covered site sets it, startup reports what raising it would
+  cost in sites, and **`--target-n N`** projects to `N` instead, excluding
+  sites too sparse to reach it and reporting the contributing count in
+  **`nSNPsUsed`**.
+- **`--window-n-sub`** restores the previous per-window behaviour.
+  **`--const-n-sub` is now a no-op**: it selected what is now the default, and
+  its regression case shares the default's expected output to assert that.
+
+### Added -- `--version`
+
+- `divstats --version` prints the version to stdout and exits 0. It was
+  previously reachable only in the stderr banner, mixed with progress output,
+  which conda recipes and pipeline version-capture cannot use.
+
 ### Fixed -- output and parsing
 
 - **Undefined statistics are `nan`, not `-999`.** A numeric sentinel is
@@ -171,9 +195,9 @@ moving by up to roughly 19% is the more representative headline.
 ### Known issues carried forward
 
 
-- Output columns are undocumented, and the per-window effective sample size
-  is not reported even though it varies with local missingness under the
-  default subsampling.
+- The partition columns are labelled `_A`, `_B`, `_C` with no record anywhere
+  of which base-pair span each letter covers, so a partitioned output file
+  cannot be decoded without the original command line.
 
 ## 1.0.0
 
