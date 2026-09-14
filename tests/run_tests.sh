@@ -165,6 +165,14 @@ build_fixtures() {
   awk 'BEGIN{OFS="\t"} /^#/{print; next}
        {n++; if (n > 200) $1="chr10"; print}' "$SCRATCH/core.vcf" \
      | gzip -c > "$SCRATCH/multichr.vcf.gz"
+  # The same SNPs shifted to start at 100 Mb. --bp windows used to start at
+  # coordinate 0 whatever the data, so this emitted ~100,000 rows with no
+  # SNPs in them before the first informative window. core.vcf.gz itself
+  # starts at position 383, where the very first window already has data, so
+  # nothing in the suite reached this path.
+  awk 'BEGIN{OFS="\t"} /^#/{print; next} {$2=$2+100000000; print}' "$SCRATCH/core.vcf" \
+     | gzip -c > "$SCRATCH/faroffset.vcf.gz"
+
   # Every SNP placed exactly on a --winsize 1000 window END (999, 1999, ...).
   # The inclusive-boundary walk used to stop ON such a SNP and then decrement
   # past it, so every window reported zero SNPs and the whole file was lost.
@@ -342,6 +350,7 @@ define_case sites-sliding     table -- --vcf "$C" --sites --winsize 100 --winste
 # previous build every window here reports 0 SNPs and the statistics are all
 # undefined; the boundary is inclusive at both ends, as findInclusiveSNPIndicies
 # is named for.
+define_case bp-far-offset     table -- --vcf "$SCRATCH/faroffset.vcf.gz" --bp --winsize 10000 --winstep 1000 --pi --s
 define_case bp-on-boundary   table -- --vcf "$SCRATCH/onboundary.vcf.gz" --bp --winsize 1000 --winstep 1000 --pi --s --d --h
 define_case bp-basic          table -- --vcf "$C" --bp --winsize 200000 --winstep 200000 --pi --s --d --h
 define_case bp-sliding        table -- --vcf "$C" --bp --winsize 200000 --winstep 50000 --pi --s

@@ -343,6 +343,23 @@ The largest lever is the input format, not the code: BCF cuts htslib's share
 from 0.183 s to 0.032 s, because it removes the text parse entirely. This is
 now documented in the README.
 
+### Fixed -- empty leading windows in `--bp` mode
+
+- **`--bp` windows started at coordinate 0 regardless of where the data
+  begin.** A region starting at 100 Mb with `--winstep 1000` emitted roughly
+  100,000 rows containing no SNPs before the first informative window, each
+  one calling `findInclusiveSNPIndicies`. Scanning now starts at the earliest
+  window on the same grid that still reaches the first SNP.
+
+  The grid stays anchored at 0, so every window that contains data keeps the
+  coordinates it had; only all-empty leading rows disappear. Because windows
+  overlap when `--winstep` is smaller than `--winsize`, the start is the first
+  multiple of `--winstep` at or after `firstPos - winsize + 1`, not the window
+  containing `firstPos` — any earlier window provably ends before the first
+  SNP. On a 300-SNP region at 100 Mb with `--winsize 10000 --winstep 1000`:
+  100,080 rows to 89, the 89 data-bearing rows byte-identical, 0.12 s to
+  0.04 s.
+
 ### Known issues carried forward
 
 

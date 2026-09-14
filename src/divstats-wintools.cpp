@@ -9,7 +9,24 @@ vector< pair_t* > *findAllWindows(MapData *mapData, int WINSIZE, int WINSTEP, bo
 		int endOfData = mapData->physicalPos[numSnps - 1];	
 		int snpIndexStart = 0;
 
-		for (int currWinStart = 0; currWinStart < endOfData; currWinStart += WINSTEP/*, currWinEnd += WINSTEP*/) {	
+		//Windows used to start at coordinate 0 whatever the data. A region
+		//beginning at 100 Mb with --winstep 1000 therefore emitted 100,000
+		//rows with no SNPs in them before the first informative window, each
+		//one calling findInclusiveSNPIndicies.
+		//
+		//Start instead at the EARLIEST window on the same grid that still
+		//reaches the first SNP. Windows overlap when WINSTEP < WINSIZE, so
+		//that is not the window containing firstPos but the first multiple of
+		//WINSTEP at or after firstPos - WINSIZE + 1: any earlier window ends
+		//before firstPos and is provably empty. Keeping the grid anchored at
+		//0 means every window that does contain data keeps the coordinates it
+		//had before, so only all-empty leading rows disappear.
+		int firstPos = mapData->physicalPos[0];
+		int firstStart = 0;
+		long lo = (long)firstPos - (long)WINSIZE + 1;
+		if (lo > 0) firstStart = (int)(((lo + WINSTEP - 1) / WINSTEP) * (long)WINSTEP);
+
+		for (int currWinStart = firstStart; currWinStart < endOfData; currWinStart += WINSTEP/*, currWinEnd += WINSTEP*/) {	
 			if(currWinStart+WINSIZE-1 >= endOfData) break;
 			//Find SNP index boundaries for the whole window
 			pair_t *snps = findInclusiveSNPIndicies(snpIndexStart, currWinStart, WINSIZE, mapData);
