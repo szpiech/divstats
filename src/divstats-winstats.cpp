@@ -733,8 +733,29 @@ double tajimaD_from_sfs(array_t *sfs, double pi, double S) {
    //the branch over ~15,000 fractional-S evaluations reached it zero times.
    //It is kept so that a future change to the coefficients cannot
    //reintroduce a silent sqrt of a negative number.
+   //A window must contain at least one expected segregating site for D to
+   //mean anything. Subsampling makes S fractional -- it is the expected
+   //number of sites still polymorphic after projection -- so a window can
+   //report 0 < S < 1, which an integer count can never produce. D is not
+   //merely noisy there, it is systematically attenuated: the numerator
+   //pi - S/a1 is linear in S while the denominator goes as sqrt(S), so
+   //
+   //    D(S) / D(S=1) = sqrt(S) * sqrt(e1 / (e1 - e2*(1-S)))
+   //
+   //exactly, with the allele-frequency terms cancelling (verified against a
+   //direct calculation at four derived counts, agreeing to 3e-16). A window
+   //holding a third of an expected segregating site therefore reports a D
+   //shrunk to about 58% of what that one site would give, in the same column
+   //as windows carrying hundreds of sites. Reporting it undefined is the
+   //honest answer; S itself is still written, so these windows remain
+   //distinguishable from empty ones.
+   //
+   //This costs nothing on unprojected data, where S is a whole number and
+   //S < 1 means S == 0. It is rare on projected data too: 0.1% of windows at
+   //5% missing genotypes and 1.1% at 25%, and none once windows average ten
+   //or more segregating sites.
    double radicand = e1 * S + e2 * S * (S - 1);
-   if (S <= 0 || radicand <= 0) return UNDEFINED_STAT;
+   if (S < MIN_SEGSITES_FOR_D - SEGSITES_TOL || radicand <= 0) return UNDEFINED_STAT;
 
    denominator = sqrt(radicand);
 

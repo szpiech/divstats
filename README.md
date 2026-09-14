@@ -68,7 +68,7 @@ or to `--winsize` respectively.
 |---|---|---|
 | `--pi` | `pi` | mean pairwise differences per window |
 | `--s` | `S` | segregating sites (fractional when subsampling) |
-| `--d` | `D` | Tajima's *D* |
+| `--d` | `D` | Tajima's *D*; `nan` where `S` < 1, see below |
 | `--h` | `H` | Fay & Wu's *H* |
 | `--pik k [k…]` | `pik` | π among the *k* most frequent haplotypes |
 | `--ehh w [w…]` | `ehh<w>` | EHH in sub-windows of *w* SNPs (`--sites`) or *w* bp (`--bp`) |
@@ -77,6 +77,33 @@ or to `--winsize` respectively.
 
 With `--partition`, each statistic also appears per partition, suffixed `_A`,
 `_B`, … in partition order.
+
+### Tajima's *D* requires at least one segregating site
+
+`D` is written as the na-string in any window whose `S` is below 1.
+
+Subsampling makes `S` an *expected* count — the number of sites still
+polymorphic after projecting to the run's sample size — so a window can report
+`0 < S < 1`, which a whole-number count cannot produce. `D` is not merely
+noisy there. Its numerator is linear in `S` while its denominator grows as
+`sqrt(S)`, so the value is systematically shrunk toward zero by
+
+    D(S) / D(S=1) = sqrt(S) * sqrt(e1 / (e1 - e2*(1 - S)))
+
+exactly — the allele-frequency terms cancel, so the attenuation depends only
+on `S` and the sample size. A window holding a third of an expected
+segregating site would otherwise report a `D` at about 58% of what that one
+site gives, in the same column as windows carrying hundreds of sites.
+
+`S`, `pi` and `H` are still reported for these windows, so they remain
+distinguishable from empty ones — filter on `S` if you want them back. Nothing
+changes without subsampling, where `S` is a whole number and `S < 1` means
+`S = 0`. On projected data the rule is rare: roughly 0.1% of windows at 5%
+missing genotypes and 1.1% at 25%, and none once windows average ten or more
+segregating sites.
+
+`H` here is the unnormalised *π* − *θ*<sub>H</sub> and `pi` does not involve
+`S`, so neither is affected by this rule.
 
 ## SweepFinder2 export
 

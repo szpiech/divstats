@@ -323,6 +323,14 @@ define_case large-n-subsample table -- --vcf "$HERE/data/large-n.vcf.gz" --sites
 # 0.0/0.0 happens to produce. Also exercises --na-string itself.
 define_case tinywin-undef    table -- --vcf "$C" --sites --winsize 2 --winstep 2 --pi --s --d --h
 define_case na-string-NA     table -- --vcf "$C" --sites --winsize 10 --winstep 10 --pik 4 --na-string NA
+# Tajima's D in windows holding LESS THAN ONE expected segregating site.
+# Subsampling makes S fractional, so 0 < S < 1 is reachable -- an integer
+# count cannot produce it -- and D is attenuated there by about sqrt(S)
+# rather than merely noisy. Eight of these 80 windows are in that regime;
+# D is the na-string in exactly those, while S, pi and H are still reported
+# so the windows stay distinguishable from empty ones. Fails against any
+# build that emits the attenuated value.
+define_case subone-s          table -- --vcf "$C" --sites --winsize 5 --winstep 5 --pi --s --d --h
 define_case sites-basic       table -- --vcf "$C" --sites --winsize 100 --winstep 100 --pi --s --d --h
 # Same arguments as sites-basic against the same variants stored as BCF, and
 # it shares sites-basic's golden -- so it asserts that the binary format gives

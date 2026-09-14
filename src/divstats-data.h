@@ -28,6 +28,22 @@
 using namespace std;
 
 const double MISSING = -999;
+//Tajima's D needs at least one expected segregating site. With SFS
+//subsampling S is fractional, so 0 < S < 1 is reachable and D is attenuated
+//by roughly sqrt(S) there; see the note in tajimaD_from_sfs. On unprojected
+//data S is a whole number, so this only ever excludes S == 0.
+const double MIN_SEGSITES_FOR_D = 1.0;
+
+//S is accumulated as a sum of projected bin masses, so a site that is
+//CERTAIN to stay polymorphic does not sum to exactly 1: the window's
+//contribution is sum over j=1..H-1 of P(X=j), which is 1 - P(0) - P(H) only
+//in exact arithmetic and lands a few ulps below it in double. Without this
+//tolerance the test above rejects windows holding exactly one whole site --
+//42 of them in the 200-window --winsize 2 scan of tests/data/core.vcf.gz.
+//The slack is far below any attenuation worth acting on: at S = 1 - 1e-6 the
+//shrinkage factor is sqrt(S) = 0.9999995.
+const double SEGSITES_TOL = 1e-6;
+
 //Undefined STATISTICS are NaN, not -999. A numeric sentinel is silently
 //absorbed by anything that averages a column -- mean(), quantile(), a
 //smoothing window -- turning "this window has no answer" into a plausible

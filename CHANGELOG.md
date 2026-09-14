@@ -196,6 +196,25 @@ moving by up to roughly 19% is the more representative headline.
   detected; and every bad flag is reported in one run instead of only the
   first.
 
+### Changed -- Tajima's D in sub-one-site windows
+
+- **`D` is now undefined when `S < 1`**, written as the na-string. With SFS
+  subsampling `S` is an expected count, so `0 < S < 1` is reachable; `D` is
+  attenuated there by `sqrt(S) * sqrt(e1/(e1 - e2*(1-S)))`, exactly and
+  independently of allele frequency, so a window with a third of an expected
+  segregating site reported a `D` shrunk to about 58% of one site's value in
+  the same column as fully populated windows. The attenuation is conservative
+  — it shrinks toward zero and cannot manufacture a selection signal — but it
+  is not a value worth reporting.
+
+  `S`, `pi` and `H` are unchanged and still written for these windows. `D` is
+  the only statistic that reads `S`: `H` is the unnormalised *pi* - *theta_H*
+  and `pi` does not involve `S`.
+
+  No effect without subsampling, where `S` is a whole number. With
+  subsampling this changed 22 of 200 windows at `--winsize 2` and 8 of 80 at
+  `--winsize 5` on the 400-site test fixture, and none at `--winsize 100`.
+
 ### Known issues carried forward
 
 
