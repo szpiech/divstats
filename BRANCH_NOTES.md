@@ -49,6 +49,7 @@ Run `make check` in `src/` after any change on this branch.
 | `7504fdd` | **P2** site-major genotype fill + blocked transpose; htslib thread pool | no (byte-identical) |
 | `036ae89` | **P12** `--bp` windows start at the data, not coordinate 0 | yes: empty leading rows gone |
 | `a3d5560` | **P11** alleles stored two bits per site | no (byte-identical) |
+| `37b67d9` | **P6 P7** hoisted spectrum lookups, const-ref strings and maps | no (byte-identical) |
 
 For the count and anything added after the rows above, ask git rather than
 trusting this table:
