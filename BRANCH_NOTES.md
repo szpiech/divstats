@@ -44,6 +44,7 @@ Run `make check` in `src/` after any change on this branch.
 | `bba3052` | **P10** contiguous results table, no per-row flush | no (byte-identical) |
 | `c4d0251` | Tajima's D undefined below one expected segregating site | yes, D only |
 | `573c70d` | **U1 U2 U7** grouped `--help`, usage on bare run, progress | no (byte-identical) |
+| `48f8b15` | **U10** platform-detecting Makefile; warning-free build | no (byte-identical) |
 
 For the count and anything added after the rows above, ask git rather than
 trusting this table:
