@@ -28,15 +28,33 @@ Any variable can be overridden on the command line:
     make CXX=clang++ OPT="-O2 -g"
     make install PREFIX=$HOME/.local
 
-htslib is vendored as a static archive per platform, but only
-`lib/macos-arm/libhts.a` is committed — that is the only platform it has been
-built on. On any other platform `make` stops with a message pointing at:
+### htslib
 
-    ./lib/build_htslib.sh linux        # or osx, macos-arm
+htslib is vendored as a prebuilt static archive, one per platform, at
+`lib/<platform>/libhts.a`. An archive is committed for each platform it has
+been built on so far; to see whether yours is covered:
 
-which fetches htslib, configures it without bzip2/lzma/libcurl/libdeflate
-(CRAM features divstats does not use, so nothing beyond zlib is needed) and
-writes `lib/<platform>/libhts.a`.
+    make info          # prints the detected platform and whether libhts.a is there
+    ls lib/*/libhts.a  # what is committed
+
+If it is missing, `make` stops with that path and the command to produce it
+rather than a page of undefined symbols:
+
+    ./lib/build_htslib.sh              # platform detected from uname
+    ./lib/build_htslib.sh linux 1.21   # or state it explicitly
+
+The script fetches the htslib **release tarball** (the GitHub tag archive
+lacks the generated `configure`), builds it without
+bzip2/lzma/libcurl/libdeflate — CRAM features divstats does not use, so
+nothing beyond zlib is needed — writes `lib/<platform>/libhts.a`, refreshes
+`include/htslib/`, and then verifies the archive references none of those
+back-ends, failing if it does. Commit the result so nobody on that platform
+has to repeat it.
+
+A committed archive is tied to the toolchain and C library it was built
+against. If one is present for your platform but linking fails, rebuild it
+locally with the same script; the headers are platform-independent and do not
+need regenerating.
 
 ## Input
 

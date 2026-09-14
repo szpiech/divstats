@@ -120,10 +120,12 @@ moving by up to roughly 19% is the more representative headline.
 - **GSL is no longer required.** `gsl_combination` was its only use, in the
   tie enumeration the closed form replaces. 52 MB of vendored static libraries
   and 1.4 MB of headers are gone from the repository.
-- **htslib is vendored** in its place (4.5 MB), configured without
+- **htslib is vendored** in its place, configured without
   bzip2/lzma/libcurl/libdeflate so it needs nothing beyond the zlib divstats
-  already linked. Only `lib/macos-arm/libhts.a` is committed;
-  `lib/build_htslib.sh` reproduces it for other platforms.
+  already linked. A prebuilt `lib/<platform>/libhts.a` is committed for each
+  platform it has been built on; on any other, `make` stops with the expected
+  path and the `lib/build_htslib.sh` command that produces it. `make info`
+  reports whether the current platform is covered.
 - Malformed input now exits 1 with its diagnostic. The readers signal failure
   by throwing, but only command-line parsing was wrapped, so these aborted on
   SIGABRT (exit 134) after printing the error.

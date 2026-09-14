@@ -7,10 +7,15 @@
 # defaults to the value below. Writes lib/<platform>/libhts.a and refreshes
 # include/htslib/*.h.
 #
-# Only lib/macos-arm/libhts.a is committed, because that is the only platform
-# the library has been built on here. Run this on a Linux box to populate
-# lib/linux, and so on. The headers are platform-independent, so they only
-# need generating once.
+# An archive is committed for each platform it has been built on. Run this on
+# any platform that is not yet covered -- `make info` in src/ reports whether
+# the current one has an archive -- and commit the result so nobody on that
+# platform has to repeat it. The headers are platform-independent, so they
+# only need generating once.
+#
+# An archive is tied to the toolchain and C library it was built against, so
+# one that is present may still fail to link on a sufficiently different
+# system; rebuilding locally with this script is the fix.
 #
 # The configuration is deliberately minimal: bzip2, lzma, libcurl and
 # libdeflate are CRAM features that divstats does not use, and disabling them
