@@ -220,6 +220,9 @@ void readVariantDataHTS(string filename, bool HEMI, int nThreads,
    //nhaps destination rows are filled from it; the destination writes are
    //contiguous within a row. A straight nhaps x nloci transpose instead
    //re-reads the whole source once per haplotype.
+   //Blocks are a multiple of 4 loci so that a block boundary never falls
+   //inside a packed byte; each destination byte is then written once, by one
+   //block, and the four sites feeding it are all in this block.
    const long BLOCK = 256;
    for (long b = 0; b < nloci; b += BLOCK) {
       long bend = (b + BLOCK < nloci) ? b + BLOCK : nloci;
@@ -227,7 +230,7 @@ void readVariantDataHTS(string filename, bool HEMI, int nThreads,
          char *dst = hapData->data[h];
          const char *src = &siteMajor[(size_t)b * nhaps + h];
          for (long l = b; l < bend; l++) {
-            dst[l] = *src;
+            hapSet(dst, l, *src);
             src += nhaps;
          }
       }

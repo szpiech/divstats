@@ -20,7 +20,13 @@
 #include <algorithm>
 #include <functional>
 
-int hamming_dist_ptr(short *one, short *two, int length)
+//Sites differing between two packed haplotype rows over [start, start+length).
+//The two raw-pointer overloads this replaces compared rows byte for byte,
+//which is no longer the same thing -- a byte now holds four sites. Neither
+//had a caller left once this existed, and leaving them would have been a
+//trap: both compile against a packed row and silently compare the wrong
+//thing.
+int hamming_dist_packed(const char *one, const char *two, long start, int length)
 {
    if(length == 0) return 0;
 
@@ -28,21 +34,7 @@ int hamming_dist_ptr(short *one, short *two, int length)
 
    for(int i = 0; i < length; i++)
    {
-      if(one[i] != two[i]) diff++;
-   }
-
-   return diff;
-}
-
-int hamming_dist_ptr(char *one, char *two, int length)
-{
-   if(length == 0) return 0;
-
-   int diff = 0;
-
-   for(int i = 0; i < length; i++)
-   {
-      if(one[i] != two[i]) diff++;
+      if(hapCode(one, start + i) != hapCode(two, start + i)) diff++;
    }
 
    return diff;
@@ -390,19 +382,31 @@ HaplotypeFrequencySpectrum *hfs_window(HaplotypeData * hapData, pair_t* snpIndex
 
    //Generate haplotypes and populate hap2count.
    //
-   //This appended one character at a time -- length operator+= calls per
-   //haplotype per window, each with a capacity check and possible
-   //reallocation. The alleles are already contiguous in hapData->data[hap],
-   //so the window is one memchr to find a missing allele and one memcpy to
-   //copy the range. A haplotype containing any missing allele is skipped, as
-   //before, so memchr decides that without a per-character loop.
+   //Alleles are packed 2 bits per site, so the window is unpacked into the
+   //character string this map has always been keyed on. Keying on the packed
+   //bytes directly would be smaller and cheaper to compare, and the codes are
+   //assigned to make that ordering-safe -- see divstats-data.h -- but a
+   //window starts at an arbitrary site, so a packed key would have to be
+   //bit-shifted into alignment first. Unpacking keeps the key byte-for-byte
+   //what it was before packing, which is what makes this change provably
+   //invisible in the output.
+   //
+   //The missing-allele test rides along with the unpack and breaks at the
+   //first one, so a haplotype with an early missing site now costs less than
+   //the memchr over the whole window that this replaces.
    const int length = snpIndex->end - snpIndex->start + 1;
+   const long winStart = snpIndex->start;
    string haplotype;
+   haplotype.resize(length);
    for (int hap = 0; hap < hapData->nhaps; hap++) {
-      const char *row = hapData->data[hap] + snpIndex->start;
-      if (memchr(row, MISSING_ALLELE, length) != NULL) continue;
-
-      haplotype.assign(row, length);
+      const char *row = hapData->data[hap];
+      bool skip = false;
+      for (int k = 0; k < length; k++) {
+         char a = hapGet(row, winStart + k);
+         if (a == MISSING_ALLELE) { skip = true; break; }
+         haplotype[k] = a;
+      }
+      if (skip) continue;
       map<string, int>::iterator hit = hfs->hap2count.find(haplotype);
       if (hit == hfs->hap2count.end()) hfs->hap2count[haplotype] = 1;
       else hit->second++;
@@ -469,7 +473,7 @@ double pi_window(HaplotypeData * hapData, pair_t* snpIndex) {
    else {
       for (int i = 0; i < hapData->nhaps; i++) {
          for (int j = i + 1; j < hapData->nhaps; j++) {
-            pi += hamming_dist_ptr(hapData->data[i] + snpIndex->start, hapData->data[j] + snpIndex->start, length);
+            pi += hamming_dist_packed(hapData->data[i], hapData->data[j], snpIndex->start, length);
          }
       }
    }

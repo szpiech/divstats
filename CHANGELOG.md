@@ -360,6 +360,36 @@ now documented in the README.
   100,080 rows to 89, the 89 data-bearing rows byte-identical, 0.12 s to
   0.04 s.
 
+### Changed -- genotype storage
+
+- **Alleles are stored two bits per site, four to a byte.** There are exactly
+  four values — `-` missing, `0`, `1`, and the `9` fill written before a
+  reader overwrites it — so they fit a 2-bit field with no spare state. The
+  matrix drops from `nhaps × nloci` bytes to a quarter of that: 19.1 MB to
+  4.8 MB on a 400-haplotype × 50,000-site file, and 18.6 GB to 4.7 GB at
+  2,000 haplotypes × 10M sites, which is the scale it matters at.
+
+  It is also **faster**, not slower as a packing change usually is: peak RSS
+  73.8 → 53.1 MB, and π/S/D/H 18% faster, `--pik` 26% faster, a sliding EHH
+  scan 4% faster. The per-site shift and mask cost less than the cache misses
+  they remove.
+
+  Output is byte-identical. `hfs_window` unpacks each window into the same
+  character string the haplotype map has always been keyed on, so the map
+  ordering — which `pi_k2` reads back through `count2hap`, making it
+  observable in `--pik` output — cannot move. The codes are nonetheless
+  assigned in ascending ASCII order of the characters they replace, with
+  sites laid out most-significant-first, so that byte-wise comparison of
+  equal-length packed rows already orders identically to the unpacked
+  strings; that was verified exhaustively over 17.9M ordered pairs and leaves
+  the door open to keying the map on packed bytes directly.
+
+- **Three dead readers removed.** `readHaplotypeData`, `readHaplotypeDataVCF`
+  and `readMapDataVCF` had no callers once htslib took over, and the two
+  `hamming_dist_ptr` overloads had none once distances were computed on
+  packed rows. Leaving the latter would have been a trap: both compile
+  against a packed row and silently compare four sites per byte.
+
 ### Known issues carried forward
 
 

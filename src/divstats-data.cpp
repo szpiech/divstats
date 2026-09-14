@@ -86,9 +86,10 @@ FreqData *initFreqData(HaplotypeData* data) {
         freqData->nmissing[locus] = 0;
         for (int hap = 0; hap < data->nhaps; hap++)
         {
-            freqData->count[locus] += ( data->data[hap][locus] == '1' ? 1 : 0 );
-            freqData->nmissing[locus] += ( data->data[hap][locus] == MISSING_ALLELE ? 1 : 0 );
-            if (data->data[hap][locus] != '0' && data->data[hap][locus] != '1' && data->data[hap][locus] != MISSING_ALLELE)
+            char a = hapGet(data->data[hap], locus);
+            freqData->count[locus] += ( a == '1' ? 1 : 0 );
+            freqData->nmissing[locus] += ( a == MISSING_ALLELE ? 1 : 0 );
+            if (a != '0' && a != '1' && a != MISSING_ALLELE)
             {
                 cerr << "ERROR:  Alleles must be coded 0/1 only.\n";
                 throw 0;
@@ -246,69 +247,6 @@ MapData *readMapDataTPED(string filename, int expected_loci, int expected_haps)
     return data;
 }
 
-MapData *readMapDataVCF(string filename, int expected_loci) {
-    igzstream fin;
-    cerr << "Opening " << filename << "...\n";
-    fin.open(filename.c_str());
-
-    if (fin.fail())
-    {
-        cerr << "ERROR: Failed to open " << filename << " for reading.\n";
-        throw 0;
-    }
-
-    string line;
-    int nloci = 0;
-    int numCommentedLines = 0;
-    while (getline(fin, line))
-    {
-        if (line[0] == '#') {
-            numCommentedLines++;
-        }
-        else {
-            nloci++;
-        }
-    }
-
-    if (nloci != expected_loci)
-    {
-        cerr << "ERROR: Expected " << expected_loci << " loci in file but found " << nloci << ".\n";
-        throw 0;
-    }
-
-    fin.clear(); // clear error flags
-    //fin.seekg(fileStart);
-    fin.close();
-    fin.open(filename.c_str());
-
-    if (fin.fail())
-    {
-        cerr << "ERROR: Failed to open " << filename << " for reading.\n";
-        throw 0;
-    }
-
-    cerr << "Loading map data for " << nloci << " loci\n";
-
-    for (int i = 0; i < numCommentedLines; i++) {
-        getline(fin, line);
-    }
-
-    MapData *data = initMapData(nloci);
-
-    string chr;
-    for (int locus = 0; locus < data->nloci; locus++)
-    {
-        fin >> data->chr;
-        fin >> data->physicalPos[locus];
-        fin >> data->locusName[locus];
-        getline(fin, line);
-        data->geneticPos[locus] = data->physicalPos[locus];
-    }
-
-    fin.close();
-    return data;
-}
-
 //allocates the arrays and populates them with MISSING or "--" depending on type
 MapData *initMapData(int nloci)
 {
@@ -344,83 +282,6 @@ void releaseMapData(MapData *data)
     delete data;
     data = NULL;
     return;
-}
-
-//reads in haplotype data and also does basic checks on integrity of format
-//returns a populated HaplotypeData structure if successful
-//throws an exception otherwise
-HaplotypeData *readHaplotypeData(string filename)
-{
-    igzstream fin;
-    cerr << "Opening " << filename << "...\n";
-    fin.open(filename.c_str());
-
-    if (fin.fail())
-    {
-        cerr << "ERROR: Failed to open " << filename << " for reading.\n";
-        throw 0;
-    }
-
-    //int fileStart = fin.tellg();
-    string line;
-    int nhaps = 0;
-    int previous_nloci = -1;
-    int current_nloci = 0;
-    //Counts number of haps (rows) and number of loci (cols)
-    //if any lines differ, send an error message and throw an exception
-    while (getline(fin, line))
-    {
-        //getline(fin,line);
-        //if(fin.eof()) break;
-        nhaps++;
-        current_nloci = countFields(line);
-        //cout << "nloci: " << current_nloci << endl;
-        if (previous_nloci < 0)
-        {
-            previous_nloci = current_nloci;
-            continue;
-        }
-        else if (previous_nloci != current_nloci)
-        {
-            cerr << "ERROR: line " << nhaps << " of " << filename << " has " << current_nloci
-                 << ", but the previous line has " << previous_nloci << ".\n";
-            throw 0;
-        }
-        previous_nloci = current_nloci;
-    }
-
-    fin.clear(); // clear error flags
-    //fin.seekg(fileStart);
-    fin.close();
-    fin.open(filename.c_str());
-
-    if (fin.fail())
-    {
-        cerr << "ERROR: Failed to open " << filename << " for reading.\n";
-        throw 0;
-    }
-
-    cerr << "Loading " << nhaps << " haplotypes and " << current_nloci << " loci...\n";
-
-    HaplotypeData *data = initHaplotypeData(nhaps, current_nloci);
-
-
-    for (int hap = 0; hap < data->nhaps; hap++)
-    {
-        for (int locus = 0; locus < data->nloci; locus++)
-        {
-            fin >> data->data[hap][locus];
-            if (data->data[hap][locus] != '0' && data->data[hap][locus] != '1')
-            {
-                cerr << "ERROR:  Alleles must be coded 0/1 only.\n";
-                throw 0;
-            }
-        }
-    }
-
-    fin.close();
-
-    return data;
 }
 
 HaplotypeData *readHaplotypeDataTPED(string filename)
@@ -495,126 +356,8 @@ HaplotypeData *readHaplotypeDataTPED(string filename)
                 cerr << "ERROR:  Alleles must be coded 0/1 only.\n";
                 throw 0;
             }
-            if (allele.compare(TPED_MISSING) == 0) data->data[hap][locus] = MISSING_ALLELE;
-            else data->data[hap][locus] = allele[0];
-        }
-    }
-
-    fin.close();
-
-    return data;
-}
-
-HaplotypeData *readHaplotypeDataVCF(string filename, bool HEMI)
-{
-    igzstream fin;
-    cerr << "Opening " << filename << "...\n";
-    fin.open(filename.c_str());
-
-    if (fin.fail())
-    {
-        cerr << "ERROR: Failed to open " << filename << " for reading.\n";
-        throw 0;
-    }
-
-    int numMapCols = 9;
-    //int fileStart = fin.tellg();
-    string line;
-    int nloci = 0;
-    int previous_nhaps = -1;
-    int current_nhaps = 0;
-    //Counts number of haps (cols) and number of loci (rows)
-    //if any lines differ, send an error message and throw an exception
-    while (getline(fin, line))
-    {
-        if (line[0] == '#') {
-            continue;
-        }
-        //getline(fin,line);
-        //if(fin.eof()) break;
-        nloci++;
-        current_nhaps = countFields(line);
-        //cout << "nloci: " << current_nhaps << endl;
-        if (previous_nhaps < 0)
-        {
-            previous_nhaps = current_nhaps;
-            continue;
-        }
-        else if (previous_nhaps != current_nhaps)
-        {
-            cerr << "ERROR: line " << nloci << " of " << filename << " has " << current_nhaps
-                 << " fields, but the previous line has " << previous_nhaps << " fields.\n";
-            throw 0;
-        }
-        previous_nhaps = current_nhaps;
-    }
-
-    fin.clear(); // clear error flags
-    //fin.seekg(fileStart);
-    fin.close();
-    fin.open(filename.c_str());
-
-    if (fin.fail())
-    {
-        cerr << "ERROR: Failed to open " << filename << " for reading.\n";
-        throw 0;
-    }
-
-    int nhaps = (current_nhaps - numMapCols);
-    if(!HEMI) nhaps *= 2;
-    int nfields = (current_nhaps - numMapCols);
-    cerr << "Loading " << nhaps << " haplotypes and " << nloci << " loci...\n";
-
-    HaplotypeData *data = initHaplotypeData(nhaps, nloci);
-
-    string junk;
-    char allele1, allele2, separator;
-    bool skipLine = false;
-    for (int locus = 0; locus < data->nloci; locus++)
-    {
-        for (int i = 0; i < numMapCols; i++) {
-            fin >> junk;
-            if (i == 0 && junk[0] == '#') {
-                skipLine = true;
-                break;
-            }
-        }
-        if (skipLine) {
-            getline(fin, junk);
-            skipLine = false;
-            locus--;
-            continue;
-        }
-        for (int field = 0; field < nfields; field++)
-        {
-            fin >> junk;
-            allele1 = junk[0];
-            if(!HEMI){
-                separator = junk[1];
-                allele2 = junk[2];
-            
-                if ( (allele1 != '0' && allele1 != '1' && allele1 != VCF_MISSING) || (allele2 != '0' && allele2 != '1' && allele2 != VCF_MISSING) ){
-                    cerr << "ERROR: Alleles must be coded 0/1 or missing only.\n";
-                    cerr << allele1 << " " << allele2 << endl;
-                    throw 0;
-                }
-            }
-            else if (allele1 != '0' && allele1 != '1' && allele1 != VCF_MISSING){
-                cerr << "ERROR: Allele must be coded 0/1 or missing only.\n";
-                cerr << allele1 << endl;
-                throw 0;
-            }
-
-            if (!HEMI){
-                if (allele1 == VCF_MISSING) data->data[2 * field][locus] = MISSING_ALLELE;
-                else data->data[2 * field][locus] = allele1;
-                if (allele2 == VCF_MISSING) data->data[2 * field + 1][locus] = MISSING_ALLELE;
-                else data->data[2 * field + 1][locus] = allele2;
-            }
-            else{
-                if (allele1 == VCF_MISSING) data->data[field][locus] = MISSING_ALLELE;
-                else data->data[field][locus] = allele1;
-            }
+            if (allele.compare(TPED_MISSING) == 0) hapSet(data->data[hap], locus, MISSING_ALLELE);
+            else hapSet(data->data[hap], locus, allele[0]);
         }
     }
 
@@ -639,10 +382,12 @@ HaplotypeData *initHaplotypeData(unsigned int nhaps, unsigned int nloci)
     data->data = new char *[nhaps];
     for (unsigned int i = 0; i < nhaps; i++)
     {
-        data->data[i] = new char[nloci];
-        for (unsigned int j = 0; j < nloci; j++)
+        //packed 2 bits per site; the fill is MISSING_CHAR in all four slots
+        long nbytes = hapRowBytes((long)nloci);
+        data->data[i] = new char[nbytes];
+        for (long j = 0; j < nbytes; j++)
         {
-            data->data[i][j] = MISSING_CHAR;
+            data->data[i][j] = (char)0xFF;      //four copies of code 3 = '9'
         }
     }
 

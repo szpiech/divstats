@@ -57,9 +57,56 @@ const char MISSING_ALLELE = '-';
 const string TPED_MISSING = "-9";
 const char VCF_MISSING = '.';
 
+//Alleles are stored 2 BITS PER SITE, four to a byte, rather than one byte
+//each. There are exactly four values -- '-' missing, '0', '1', and '9', the
+//fill initHaplotypeData writes before a reader overwrites it -- so they fit a
+//2-bit field exactly, with no spare state to get wrong. One byte per allele
+//costs nhaps*nloci: 19 MB for 400 haplotypes x 50,000 sites, but 18.6 GB for
+//a 2,000-haplotype scan of 10M sites, which is the scale this matters at.
+//
+//The codes are assigned in ASCENDING ASCII ORDER of the characters they
+//replace ('-' 45 < '0' 48 < '1' 49 < '9' 57), and the four sites in a byte
+//are laid out most-significant-first. Those two properties together mean a
+//byte-wise comparison of two equal-length packed rows gives the same ordering
+//as a comparison of the unpacked strings. That is not decoration: hfs_window
+//keys a std::map on haplotype strings and pi_k2 reads that map's order back
+//out through count2hap, so the ordering is observable in --pik output.
+const char ALLELE_DECODE[4] = {'-', '0', '1', '9'};
+
+inline int alleleEncode(char c)
+{
+  switch (c) {
+    case '-': return 0;
+    case '0': return 1;
+    case '1': return 2;
+    default:  return 3;      //'9', the pre-read fill
+  }
+}
+
+//bytes needed for one haplotype row
+inline long hapRowBytes(long nloci) { return (nloci + 3) >> 2; }
+
+//site l of row `row`, as the character it used to be stored as
+inline char hapGet(const char *row, long l)
+{
+  return ALLELE_DECODE[(row[l >> 2] >> (6 - 2 * (l & 3))) & 3];
+}
+
+//the raw 2-bit code, for comparisons that do not need the character
+inline int hapCode(const char *row, long l)
+{
+  return (row[l >> 2] >> (6 - 2 * (l & 3))) & 3;
+}
+
+inline void hapSet(char *row, long l, char c)
+{
+  int shift = 6 - 2 * (l & 3);
+  row[l >> 2] = (char)((row[l >> 2] & ~(3 << shift)) | (alleleEncode(c) << shift));
+}
+
 struct HaplotypeData
 {
-  char **data;
+  char **data;          //packed: hapRowBytes(nloci) bytes per haplotype
   int nhaps;
   int nloci;
 };
@@ -124,7 +171,6 @@ void releaseFreqData(FreqData *data);
 //throws an exception otherwise
 MapData *readMapData(string filename, int expected_loci);
 MapData *readMapDataTPED(string filename, int expected_loci, int expected_haps);
-MapData *readMapDataVCF(string filename, int expected_loci); //Physical positions only
 
 //allocates the 2-d array and populated it with -9
 HaplotypeData *initHaplotypeData(unsigned int nhaps, unsigned int nloci);
@@ -133,9 +179,7 @@ void releaseHapData(HaplotypeData *data);
 //reads in haplotype data and also does basic checks on integrity of format
 //returns a populated HaplotypeData structure if successful
 //throws an exception otherwise
-HaplotypeData *readHaplotypeData(string filename);
 HaplotypeData *readHaplotypeDataTPED(string filename);
-HaplotypeData *readHaplotypeDataVCF(string filename, bool HEMI);
 
 //counts the number of "fields" in a string
 //where a field is defined as a contiguous set of non whitespace

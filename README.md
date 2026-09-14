@@ -64,7 +64,11 @@ substantially faster and produces byte-identical output.** On a 400-haplotype
 | bgzipped VCF | 0.222 s | 0.328 s |
 | BCF | 0.067 s | 0.203 s |
 
-Convert once with `bcftools view -O b -o data.bcf data.vcf.gz`. `--threads`
+Convert once with `bcftools view -O b -o data.bcf data.vcf.gz`.
+
+Genotypes are held two bits per site rather than one byte, so the matrix is
+`nhaps × nloci / 4` bytes: 4.8 MB for 400 haplotypes × 50,000 sites, and
+4.7 GB rather than 18.6 GB for 2,000 haplotypes × 10M sites. `--threads`
 covers both the statistics and htslib's decoder, but the decoder only
 parallelises BGZF inflation — it does nothing for a plain-gzip VCF, and even
 for BGZF it is a few percent, because the text parse is serial.
