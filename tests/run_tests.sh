@@ -415,6 +415,13 @@ define_case sweepfinder       sweep -- --vcf "$M" --sites --winsize 100 --winste
 # The command-line surface. A bare invocation used to print four validation
 # errors instead of the usage, and --help exited 1 because param_t signalled
 # it with the same throw it uses for a bad flag.
+# The run-metadata sidecar. Partition suffixes are undecodable from the table
+# alone and mean different things in the two window modes.
+define_case log-partition     log "^  _B  SNPs 26 to 75 of each window"  0 -- --vcf "$C" --sites --winsize 100 --winstep 100 --partition 25 50 25 --pi --s
+define_case log-partition-bp  log "^  _B  base pairs 20000 to 39999 after the window start" 0 -- --vcf "$C" --bp --winsize 60000 --winstep 60000 --partition 20000 20000 20000 --pi
+define_case log-command       log "^command:.*--winsize 100"             0 -- --vcf "$C" --sites --winsize 100 --winstep 100 --pi
+# --precision changes how many significant digits each statistic carries.
+define_case precision-12      table -- --vcf "$C" --sites --winsize 100 --winstep 100 --pi --s --d --h --precision 12
 define_case usage-bare        usage "USAGE:"            1 --
 define_case usage-help        usage "EXAMPLES"          0 -- --help
 define_case usage-version     usage "^[0-9]+\\.[0-9]+\\.[0-9]+$" 0 -- --version
@@ -452,6 +459,31 @@ run_one() {
       $BIN $args --out "$out" > /dev/null 2>"$out.err"; rc=$?
       ;;
   esac
+
+  # A log case asserts that the run-metadata sidecar records something a
+  # reader needs. The partition legend is the reason it exists: _A/_B/_C are
+  # otherwise undecodable from the table, and their meaning DIFFERS by window
+  # mode -- SNP counts under --sites, base pairs under --bp -- so both are
+  # pinned. A golden comparison will not work here: the file carries a
+  # timestamp and the full command line, including the scratch path.
+  if [ "$kind" = "log" ]; then
+    if [ $rc -ne 0 ]; then
+      printf "  FAIL  %-18s exited %d\n" "$name" $rc
+      sed 's/^/    /' "$out.err" | tail -2
+      FAIL=$((FAIL+1)); FAILED_CASES+=("$name"); return
+    fi
+    if [ ! -s "$out.divstats.log" ]; then
+      printf "  FAIL  %-18s no .divstats.log written\n" "$name"
+      FAIL=$((FAIL+1)); FAILED_CASES+=("$name"); return
+    fi
+    if ! grep -qE "$tolcol" "$out.divstats.log"; then
+      printf "  FAIL  %-18s .divstats.log does not match /%s/\n" "$name" "$tolcol"
+      sed 's/^/    /' "$out.divstats.log" | head -4
+      FAIL=$((FAIL+1)); FAILED_CASES+=("$name"); return
+    fi
+    printf "  ok    %-18s .divstats.log matches /%s/\n" "$name" "$tolcol"
+    PASS=$((PASS+1)); return
+  fi
 
   # A usage case pins the command-line surface: an EXACT exit status plus a
   # pattern that must appear on stdout or stderr. Exit status is the half

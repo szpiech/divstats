@@ -26,6 +26,7 @@
 #include "divstats-cli.h"
 
 #include <cmath>
+#include <iomanip>
 #include <algorithm>
 
 using namespace std;
@@ -82,6 +83,7 @@ int main(int argc, char *argv[])
   params.addFlag(ARG_PMAP, DEFAULT_PMAP, "Statistics", HELP_PMAP);
   params.addFlag(ARG_NA_STRING, DEFAULT_NA_STRING, "Output", HELP_NA_STRING);
   params.addFlag(ARG_VERSION, DEFAULT_VERSION, "Other", HELP_VERSION);
+  params.addFlag(ARG_PRECISION, DEFAULT_PRECISION, "Output", HELP_PRECISION);
   params.addFlag(ARG_TARGET_N, DEFAULT_TARGET_N, "Sample size and missing data", HELP_TARGET_N);
   params.addFlag(ARG_WINDOW_N_SUB, DEFAULT_WINDOW_N_SUB, "Sample size and missing data", HELP_WINDOW_N_SUB);
   params.addListFlag(ARG_EHH_CM, DEFAULT_EHH_CM, "Statistics", HELP_EHH_CM);
@@ -504,6 +506,16 @@ int main(int argc, char *argv[])
   int numStats = (int)colNames.size();
 
   string NA_STRING = params.getStringFlag(ARG_NA_STRING);
+  //Statistics were written at the iostream default of 6 significant digits
+  //with no way to change it. Default stays 6, so output is unchanged unless
+  //asked.
+  int PRECISION = params.getIntFlag(ARG_PRECISION);
+  if (PRECISION < 1 || PRECISION > 17) {
+    cerr << "ERROR: " << ARG_PRECISION << " must be between 1 and 17 (got "
+         << PRECISION << "). A double carries at most 17 significant digits.\n";
+    return 1;
+  }
+  fout << setprecision(PRECISION);
   cerr << "Calculating " << numStats << " statistics in " << windows->size() << " windows.\n";
 
   //per-window sample size actually used, and the number of sites that fed the
@@ -607,6 +619,81 @@ int main(int argc, char *argv[])
   }
 
   fout.close();
+
+  //Run metadata, so an output file can still be decoded months later. The
+  //partition columns are the reason: they are suffixed _A, _B, _C with
+  //nothing anywhere recording what each letter covers, and the answer is not
+  //recoverable from the table -- under --sites a partition is a count of
+  //SNPs, under --bp a width in base pairs, and in neither case does the
+  //output say which. Written as a sidecar rather than as # comment lines in
+  //the table, so that a bare read_csv(sep='\t') keeps working.
+  string logfile = outfileBase + ".divstats.log";
+  ofstream flog;
+  flog.open(logfile.c_str());
+  if (flog.fail()) {
+    cerr << "WARNING: could not write " << logfile << "; continuing.\n";
+  }
+  else {
+    time_t now = time(NULL);
+    char stamp[64];
+    strftime(stamp, sizeof(stamp), "%Y-%m-%d %H:%M:%S", localtime(&now));
+
+    flog << "divstats " << VERSION << "\n";
+    flog << "run: " << stamp << "\n";
+    flog << "command:";
+    for (int i = 0; i < argc; i++) flog << " " << argv[i];
+    flog << "\n\n";
+
+    flog << "input: " << (TPED ? tpedFilename : vcfFilename) << "\n";
+    flog << "haplotypes: " << hapData->nhaps << "\n";
+    flog << "loci: " << hapData->nloci << "\n";
+    flog << "windows: " << windows->size() << "\n";
+    flog << "window mode: " << (USE_BP ? "--bp (base pairs)" : "--sites (SNP counts)") << "\n";
+    flog << "winsize: " << WINSIZE << "\n";
+    flog << "winstep: " << params.getIntFlag(ARG_WINSTEP) << "\n";
+    flog << "threads: " << numThreads << "\n";
+    flog << "na-string: " << NA_STRING << "\n";
+    flog << "precision: " << PRECISION << " significant digits\n";
+
+    if (!SFS_SUB) {
+      flog << "sfs subsampling: off (--no-sfs-sub); every site uses all called haplotypes\n";
+    }
+    else if (WINDOW_N) {
+      flog << "sfs subsampling: per-window minimum (--window-n-sub); n VARIES between windows\n";
+    }
+    else {
+      flog << "sfs subsampling: every window projected to n = " << TARGET_N << "\n";
+      flog << "  largest n reachable by every site: " << nExcludeNone << "\n";
+      if (CAN_EXCLUDE) flog << "  sites below n = " << TARGET_N << " are excluded; see the nSNPsUsed column\n";
+    }
+
+    if (DO_PARTITION) {
+      flog << "\npartitions: --partition";
+      for (unsigned int p = 0; p < PARTITIONS.size(); p++) flog << " " << PARTITIONS[p];
+      flog << "\n";
+      flog << "  Column suffixes _A, _B, ... index the partitions below, in order.\n";
+      flog << "  Spans are relative to the start of each window, not to the chromosome.\n";
+      long cursor = 0;
+      for (unsigned int p = 0; p < PARTITIONS.size(); p++) {
+        char letter = (char)('A' + p);
+        flog << "  _" << letter << "  ";
+        if (USE_BP) {
+          flog << "base pairs " << cursor << " to " << (cursor + PARTITIONS[p] - 1)
+               << " after the window start";
+        }
+        else {
+          flog << "SNPs " << (cursor + 1) << " to " << (cursor + PARTITIONS[p])
+               << " of each window";
+        }
+        flog << "  (width " << PARTITIONS[p] << ")\n";
+        cursor += PARTITIONS[p];
+      }
+    }
+
+    flog << "\noutput: " << outfile << "\n";
+    flog.close();
+  }
+
   delete [] nhapsUsed;
   delete [] nSitesUsed;
   delete [] results;

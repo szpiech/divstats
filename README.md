@@ -69,9 +69,12 @@ The two centre their sub-windows differently: `--ehh` on the window's
 coordinate midpoint, `--ehh-cm` on the genetic midpoint of the window's first
 and last SNP. `--ehh-cm` is not computed per partition.
 
-`--partition a b c` splits each window into sub-windows. The values are
-percentages under `--sites` and base pairs under `--bp`, and must sum to 100
-or to `--winsize` respectively.
+`--partition a b c` splits each window into sub-windows. The values are in
+the same units as `--winsize` — SNP counts under `--sites`, base pairs under
+`--bp` — and must sum to `--winsize` in both modes. Sub-windows tile the
+window with no gap or overlap, in order, and the statistic columns are
+suffixed `_A`, `_B`, … in that order. The span each suffix covers is written
+to `<out>.divstats.log`.
 
 ## Statistics
 
@@ -87,7 +90,8 @@ or to `--winsize` respectively.
 | `--ehh-cm w [w…]` | `ehhcm_<w>` | EHH in sub-windows *w* wide in genetic distance; requires `--map` |
 
 With `--partition`, each statistic also appears per partition, suffixed `_A`,
-`_B`, … in partition order.
+`_B`, … in partition order. What each suffix covers is recorded in
+`<out>.divstats.log` — it is not recoverable from the table.
 
 ### Tajima's *D* requires at least one segregating site
 
@@ -182,6 +186,31 @@ Tab-separated, to `<out>.divstats.out`:
 
 `start`/`end` are the window's first and last SNP positions, `nbps` its span,
 `nSNPs` the sites it contains. Undefined windows are written as `-999`.
+
+## Run log
+
+Every run writes `<out>.divstats.log` alongside the table: version, timestamp,
+the full command line, input and window parameters, the subsampling target,
+and — when `--partition` is used — a legend giving the span each column suffix
+covers:
+
+    partitions: --partition 25 50 25
+      Column suffixes _A, _B, ... index the partitions below, in order.
+      Spans are relative to the start of each window, not to the chromosome.
+      _A  SNPs 1 to 25 of each window  (width 25)
+      _B  SNPs 26 to 75 of each window  (width 50)
+      _C  SNPs 76 to 100 of each window  (width 25)
+
+This is a separate file rather than `#` comment lines in the table so that
+`pd.read_csv(path, sep='\t')` keeps working with no extra arguments.
+
+## Precision
+
+    --precision 12
+
+Significant digits per statistic. The default, 6, is what every previous
+version emitted, so output is unchanged unless you ask. Accepts 1–17; a
+double carries at most 17.
 
 ## Getting help
 

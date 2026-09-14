@@ -288,12 +288,38 @@ moving by up to roughly 19% is the more representative headline.
   in the pre-2.0.0 space-separated header format, and `Makefile.lin`.
   `.gitignore` now also covers `*.divstats.out*` and `*.sweepfinder.out`.
 
+### Added -- run log and output precision
+
+- **Every run writes `<out>.divstats.log`.** Version, timestamp, the full
+  command line, input and window parameters, the subsampling target, and a
+  partition legend. The legend is the point: statistic columns are suffixed
+  `_A`, `_B`, `_C` with nothing recording what each covers, and the answer is
+  not recoverable from the table — under `--sites` a partition is a count of
+  SNPs, under `--bp` a width in base pairs, and the output does not say which
+  mode produced it.
+
+  Written as a sidecar rather than as `#` comment lines above the header, so
+  that a bare `pd.read_csv(path, sep='\t')` keeps working. (The code already
+  anticipated a log: `work_order_t` carried a commented-out `ofstream *flog`.)
+
+- **`--precision N`.** Statistics were written at the iostream default of 6
+  significant digits with no way to change it. The default remains 6, so
+  output is unchanged unless asked; 1–17 accepted, and out-of-range is
+  refused rather than silently clamped.
+
+### Fixed -- documentation
+
+- **`--partition` units were documented wrongly.** The README said the values
+  were percentages under `--sites` and base pairs under `--bp`, summing to
+  100 or to `--winsize`. They are in the same units as `--winsize` in both
+  modes — SNP counts under `--sites` — and must sum to `--winsize` in both.
+  The "100" was an artifact of every example using `--winsize 100`;
+  `--sites --winsize 200 --partition 25 50 25` is refused with "Window
+  partitions sum to 100 but must sum to 200 instead."
+
 ### Known issues carried forward
 
 
-- The partition columns are labelled `_A`, `_B`, `_C` with no record anywhere
-  of which base-pair span each letter covers, so a partitioned output file
-  cannot be decoded without the original command line.
 
 ## 1.0.0
 

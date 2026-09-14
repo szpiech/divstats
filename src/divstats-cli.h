@@ -85,6 +85,11 @@ const string HELP_WINDOW_N_SUB = "Project each window to ITS OWN minimum sample 
 \tbut n then varies with local missingness and pi, S, D and H are NOT\n\
 \tcomparable between windows. This was the default before 2.0.0.";
 
+const string ARG_PRECISION = "--precision";
+const int DEFAULT_PRECISION = 6;
+const string HELP_PRECISION = "Significant digits written for each statistic. The default, 6, is\n\
+\tthe iostream default and what every previous version emitted.";
+
 const string ARG_VERSION = "--version";
 const bool DEFAULT_VERSION = false;
 const string HELP_VERSION = "Print the version to stdout and exit.";
