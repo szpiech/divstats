@@ -156,6 +156,9 @@ void calc_stats(void *order) {
 	array_t *sfs = NULL, *partition_sfs = NULL;
 	HaplotypeFrequencySpectrum *hfs = NULL, *partition_hfs = NULL, *pik_hfs = NULL;
 	pair_t *snps = NULL, *partition_snps = NULL;
+	//EHH sub-window spectra, shared between the --ehh and --ehhk branches
+	//within one window. Holds at most EHH_WINS.size() entries.
+	vector<HaplotypeFrequencySpectrum*> ehh_hfs_cache;
 
 
 	//Which statistics are switched on. These were read from params INSIDE the
@@ -183,6 +186,7 @@ void calc_stats(void *order) {
 
 		//Reset per-window: whatever the previous iteration allocated has
 		//already been released, so these must not be carried over.
+		ehh_hfs_cache.clear();
 		sfs = NULL;
 		pik_hfs = NULL;
 		partition_sfs = NULL;
@@ -212,27 +216,50 @@ void calc_stats(void *order) {
 				s_S = s;
 				s++;
 			}
+			//--ehh and --ehhk are separate STATS entries over the SAME
+			//sub-windows, and each used to call getEHHWindows and then
+			//hfs_window itself -- so asking for both built every sub-window's
+			//haplotype spectrum twice and discarded the first copy. The
+			//spectra are cached here rather than computing both statistics in
+			//one branch, which would mean writing into two different column
+			//blocks from one place on the assumption that they are adjacent.
+			//This way each branch still fills its own columns in its own
+			//order, so the output cannot shift.
 			else if (STATS[j].compare(ARG_EHH) == 0 && DO_EHH) {
 				vector< pair_t* > *ehh_windows = getEHHWindows(snps->start, snps->winStart, WINSIZE, EHH_WINS, mapData, USE_BP);
-				for (int w = 0; w < ehh_windows->size(); w++) {
+				for (unsigned int w = 0; w < ehh_windows->size(); w++) {
 					hfs = hfs_window(hapData, ehh_windows->at(w));
 					results[i][s] = ehh_from_hfs(hfs);
 					s++;
-					releaseHaplotypeFrequencySpectrum(hfs);
+					//hfs may be NULL for an empty sub-window; the cache keeps
+					//it either way so indices line up with ehh_windows
+					if (DO_EHHK) ehh_hfs_cache.push_back(hfs);
+					else releaseHaplotypeFrequencySpectrum(hfs);
 				}
 				releaseAllWindows(ehh_windows);
 			}
 			else if (STATS[j].compare(ARG_EHHK) == 0 && DO_EHHK) {
-				vector< pair_t* > *ehh_windows = getEHHWindows(snps->start, snps->winStart, WINSIZE, EHH_WINS, mapData, USE_BP);
-				for (int w = 0; w < ehh_windows->size(); w++) {
-					hfs = hfs_window(hapData, ehh_windows->at(w));
-					for (int k = 0; k < EHHK_CHOICES.size(); k++) {
-						results[i][s] = ehhk_from_hfs(hfs, EHHK_CHOICES[k]);
-						s++;
+				if (!ehh_hfs_cache.empty()) {
+					//--ehh already built these over the same sub-windows
+					for (unsigned int w = 0; w < ehh_hfs_cache.size(); w++) {
+						for (unsigned int k = 0; k < EHHK_CHOICES.size(); k++) {
+							results[i][s] = ehhk_from_hfs(ehh_hfs_cache[w], EHHK_CHOICES[k]);
+							s++;
+						}
 					}
-					releaseHaplotypeFrequencySpectrum(hfs);
 				}
-				releaseAllWindows(ehh_windows);
+				else {
+					vector< pair_t* > *ehh_windows = getEHHWindows(snps->start, snps->winStart, WINSIZE, EHH_WINS, mapData, USE_BP);
+					for (unsigned int w = 0; w < ehh_windows->size(); w++) {
+						hfs = hfs_window(hapData, ehh_windows->at(w));
+						for (unsigned int k = 0; k < EHHK_CHOICES.size(); k++) {
+							results[i][s] = ehhk_from_hfs(hfs, EHHK_CHOICES[k]);
+							s++;
+						}
+						releaseHaplotypeFrequencySpectrum(hfs);
+					}
+					releaseAllWindows(ehh_windows);
+				}
 			}
 			else if (STATS[j].compare(ARG_EHH_CM) == 0 && DO_EHHCM) {
 				//subwindows measured in map units, centred on the parent
@@ -330,6 +357,9 @@ void calc_stats(void *order) {
 			}
 		}
 		releaseHaplotypeFrequencySpectrum(pik_hfs);
+		for (unsigned int c = 0; c < ehh_hfs_cache.size(); c++)
+			releaseHaplotypeFrequencySpectrum(ehh_hfs_cache[c]);
+		ehh_hfs_cache.clear();
 
 		//The header is built independently in main, by buildColumnNames, from
 		//the same flags. If the two ever disagree the columns silently
