@@ -17,6 +17,8 @@
 */
 #include "divstats-winstats.h"
 #include <cstring>
+#include <algorithm>
+#include <functional>
 
 int hamming_dist_ptr(short *one, short *two, int length)
 {
@@ -91,7 +93,7 @@ double ehhk_from_hfs(HaplotypeFrequencySpectrum * hfs, int k) {
       i++;
    }
 
-   qsort(sortedCounts, hfs->hap2count.size(), sizeof(int), compare);
+   sort(sortedCounts, sortedCounts + hfs->hap2count.size(), greater<int>());
 
    res = homozygosity;
    int combined = 0;
@@ -418,30 +420,34 @@ HaplotypeFrequencySpectrum *hfs_window(HaplotypeData * hapData, pair_t* snpIndex
       hfs->count2hap.insert(pair<int, string>(it->second, it->first));
    }
 
-   qsort(sortedCount, hfs->hap2count.size(), sizeof(int), compare);//sorted but with possible duplicates
+   //descending, as the old qsort comparator (b - a) was
+   sort(sortedCount, sortedCount + hfs->hap2count.size(), greater<int>());//sorted but with possible duplicates
    hfs->sortedCount = uniqInt(sortedCount, hfs->numUniq, hfs->size);//remove duplicates
    delete [] sortedCount;
 
    return hfs;
 }
 
+//array must be sorted. Returns the distinct values in order, and newSize.
+//
+//This allocated a std::map purely to count the distinct values -- a red-black
+//tree node per element, to learn a number the single pass below already
+//discovers. The scan now counts and collects at once. It still takes two
+//passes over the input because the result is returned as an exactly-sized
+//array, but the second pass is over ints with no allocation per element.
 int *uniqInt(int *array, int size, int &newSize) {
-   map<int, int> uniq;
-   for (int i = 0; i < size; i++) {
-      uniq[array[i]] = 1;
-   }
-   newSize = uniq.size();
-   int *newArray = new int[newSize];
-   int prev = array[0];
-   int j = 0;
-   newArray[j] = prev;
-   j++;
+   if (size <= 0) { newSize = 0; return NULL; }
+
+   newSize = 1;
    for (int i = 1; i < size; i++) {
-      if (array[i] != prev) {
-         prev = array[i];
-         newArray[j] = prev;
-         j++;
-      }
+      if (array[i] != array[i - 1]) newSize++;
+   }
+
+   int *newArray = new int[newSize];
+   int j = 0;
+   newArray[j++] = array[0];
+   for (int i = 1; i < size; i++) {
+      if (array[i] != array[i - 1]) newArray[j++] = array[i];
    }
    return newArray;
 }
