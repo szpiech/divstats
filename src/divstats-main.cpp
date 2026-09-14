@@ -481,8 +481,15 @@ int main(int argc, char *argv[])
   //be interpreted at all
   int *nhapsUsed  = new int[windows->size()];
   int *nSitesUsed = new int[windows->size()];
+  //One contiguous block, with the row pointers indexing into it. This was
+  //a separate `new double[numStats]` per window: for a 100,000-window scan
+  //that is 100,000 allocations whose lifetimes are all identical, scattered
+  //across the heap so the write loop below walks them out of order. It was
+  //also never freed -- there is no matching delete anywhere -- so the whole
+  //results table leaked. One block is one allocation and one delete.
+  double *resultsBlock = new double[(size_t)windows->size() * numStats];
   double **results = new double*[windows->size()];
-  for (int i = 0; i < windows->size(); i++) results[i] = new double[numStats];
+  for (unsigned int i = 0; i < windows->size(); i++) results[i] = resultsBlock + (size_t)i * numStats;
 
   work_order_t *order;
   pthread_t *peer = new pthread_t[numThreads];
@@ -553,12 +560,16 @@ int main(int argc, char *argv[])
       if (std::isnan(results[w][s])) fout << "\t" << NA_STRING;
       else fout << "\t" << results[w][s];
     }
-    fout << endl;
+    //"\n" not endl: endl flushes, and flushing once per window turns a
+    //buffered write into a syscall per row.
+    fout << "\n";
   }
 
   fout.close();
   delete [] nhapsUsed;
   delete [] nSitesUsed;
+  delete [] results;
+  delete [] resultsBlock;
 
   releaseHapData(hapData);
   releaseMapData(mapData);
