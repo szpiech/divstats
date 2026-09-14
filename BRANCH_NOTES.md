@@ -35,6 +35,13 @@ Run `make check` in `src/` after any change on this branch.
 | `3f48fa7` | **B10 B19 U4** sweepfinder n and destination; parser | sweepfinder golden |
 | `6866ffe` | **B17** `--ehh-cm` genetic placement; `--ehh` drops the map | no (new columns only) |
 | `0183804` | **B18** `releaseHapData` never freed the struct | no |
+| `36bd320` | **U3 U6** `--version`; one sample size per run, `nhaps` column | yes, with missing data |
+| `ae582f4` | default target = n reachable by 99.9% of sites | no (fixtures <1000 sites) |
+| `7f8bc2a` | **P8** flags read once, not per window | no (byte-identical) |
+| `fa9f913` | **P4** share EHH sub-window spectra with `--ehhk` | no (byte-identical) |
+| `ba0baea` | **P5** one copy per haplotype string | no (byte-identical) |
+| `c942abf` | **P9** count uniques in the existing pass | no (byte-identical) |
+| `bba3052` | **P10** contiguous results table, no per-row flush | no (byte-identical) |
 
 For the count and anything added after the rows above, ask git rather than
 trusting this table:
@@ -181,31 +188,65 @@ find out which paths a case reaches is to instrument and look.
 
 ## Next, in order
 
-Every bug in the review is now fixed (19 of 19). What remains is performance
-and interface.
+Every bug in the review is fixed (19 of 19), as are U3, U4, U6, U8, U11 and
+the P1/P3/P4/P5/P8/P9/P10 performance items. What remains:
 
-1. **P8, P4, P5, P9, P10** -- the cheap, local, low-risk performance items:
-   hoist the per-window flag lookups out of the loop (which also removes the
-   unsynchronised `getBoolFlag` calls from the worker threads), compute each
-   EHH sub-window's spectrum once instead of twice across `--ehh`/`--ehhk`,
-   build haplotype strings with one `assign` instead of per-character appends,
-   count uniques in the pass that already exists, and stop flushing output
-   once per row.
-2. **P2, P6, P7** -- `hamming_dist_str` takes both strings by value and is
+1. **P2, P6, P7** -- `hamming_dist_str` takes both strings by value and is
    called from the O(k^2) inner loops; the map lookups in those loops are
    O(log n) tree walks with O(L) string comparisons per pair.
-3. **U1, U2, U3, U7** -- usage on bare invocation, grouped `--help`,
-   `--version`, progress reporting on long runs. `--help` is currently an
-   alphabetical dump in `std::map` order with no usage line and no examples.
-4. **U6** -- report the per-window effective sample size. Under the default
-   subsampling it varies with local missingness, so pi, D and H are not
-   comparable across windows, and n is not in the output.
-5. **U9, U10, U11** -- output precision flag; a Makefile keyed on `uname`
+2. **U1, U2, U7** -- usage on bare invocation, grouped `--help`, progress
+   reporting on long runs. `--help` is currently an alphabetical dump in
+   `std::map` order with no usage line and no examples.
+3. **U9, U10** -- output precision flag; a Makefile keyed on `uname`
    rather than commented blocks; and the stale `.o` files and result files
    still checked in.
-6. **P11** -- 2-bit genotype packing, only if cohort-scale runs are a target.
+4. **P11** -- 2-bit genotype packing, only if cohort-scale runs are a target.
 
 Full list and measurements in the review report.
+
+## What the P8/P4/P5/P9/P10 tier actually bought
+
+Measured on a 400-haplotype x 50,000-site file with 2% missing genotypes, best
+of three to seven runs, against the build immediately before the tier. Every
+row is byte-identical output.
+
+| item | configuration | before | after | |
+|---|---|---|---|---|
+| P8 | 25,000 windows, 1 thread | 0.762 s | 0.769 s | noise |
+| P8 | 25,000 windows, 4 threads | 0.578 s | 0.533 s | 7.8% |
+| P4 | `--ehh` **and** `--ehhk` | 0.497 s | 0.420 s | 15.5% |
+| P4 | `--ehh` alone | 0.416 s | 0.418 s | unchanged |
+| P5 | 10,000-window slide, `--ehh 100` | 1.12 s | 0.57 s | 49.4% |
+| P5 | 10,000-window slide, `--ehh 20 50` | 2.07 s | 1.60 s | 22.7% |
+| P9 | same, on top of P5 | 22.7% | 23.3% | noise |
+| P10 | 9,982 rows | 6.221 s | 6.066 s | 2.5% |
+
+Three of the five are not really performance changes and the notes should say
+so rather than let the table imply otherwise:
+
+- **P8** is a correctness fix. 200,000 map lookups are nothing next to the
+  arithmetic they guarded, which is why the single-thread column is flat. What
+  it removes is every worker thread calling a non-const member of one shared
+  `param_t` for the whole run -- undefined behaviour, not merely slow. The
+  4-thread gain is the contention disappearing.
+- **P9** contributes one to two points over P5 alone, inside run-to-run
+  variation. It stands on removing a per-call red-black tree from the
+  per-window path and on a latent out-of-bounds read of `array[0]` before the
+  size was checked.
+- **P10** is 0.8-2.5%, as a low-severity finding should be. It also supplies
+  the `delete` the results table never had -- allocated once per run and held
+  to exit, so never a growing leak, but 160 MB for a million windows with 20
+  statistics.
+
+**P5 is the one with real reach**, and measuring it took three attempts. On a
+coarse scan the spectra cost 0.015 s inside a 0.33 s run that is otherwise
+parsing, and the two builds differed by noise -- one configuration looked 3%
+*slower*. Subtracting a "parse floor" made it worse, yielding negative phase
+times, because a floor measured at a different window size is not a floor. The
+effect only appears when `hfs_window` is called enough to matter, which for
+EHH means a sliding scan. The lesson is the one P8 repeats from the other
+direction: decide what configuration exercises the code you changed before
+reading any number off it.
 
 ## Two places where verification changed the answer
 
