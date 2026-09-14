@@ -14,12 +14,23 @@ in windows defined either by a number of SNPs or by physical distance.
 
     cd src && make
 
-Requires a C++ compiler and zlib. htslib is vendored — see `lib/` below.
-`make check` runs the regression suite.
+Requires a C++ compiler and zlib. Nothing in the Makefile needs editing — the
+platform is detected from `uname`, and the x86 codegen flags are applied only
+on x86. Other targets:
 
-The Makefile selects a platform block by commenting; the default is
-`macos-arm`. Only `lib/macos-arm/libhts.a` is committed, because that is the
-only platform it has been built on. For another platform run:
+    make check      build, then run the regression suite
+    make clean      remove objects and the binary
+    make install    install to $(PREFIX)/bin   (default /usr/local)
+    make info       print the detected platform and flags
+
+Any variable can be overridden on the command line:
+
+    make CXX=clang++ OPT="-O2 -g"
+    make install PREFIX=$HOME/.local
+
+htslib is vendored as a static archive per platform, but only
+`lib/macos-arm/libhts.a` is committed — that is the only platform it has been
+built on. On any other platform `make` stops with a message pointing at:
 
     ./lib/build_htslib.sh linux        # or osx, macos-arm
 

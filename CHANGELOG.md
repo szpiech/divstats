@@ -248,6 +248,46 @@ moving by up to roughly 19% is the more representative headline.
   so short runs stay silent. Measured cost of the lock is +0.3% at one thread
   and +0.4% at four, taking it once per window.
 
+### Changed -- the build
+
+- **The Makefile detects the platform.** It carried three blocks selected by
+  commenting and uncommenting, plus a second near-duplicate file
+  (`Makefile.lin`) holding the same content with different lines commented,
+  so a build change had to be made twice and the default block was wrong for
+  most readers. Platform now comes from `uname -s` / `uname -m`; nothing
+  needs editing. `Makefile.lin` is deleted.
+
+- **x86 codegen flags are applied only on x86.** `-m64 -mmmx -msse -msse2`
+  were unconditional. They do not break an ARM build — clang accepts and
+  ignores them — but they emitted "argument unused during compilation" on
+  every translation unit.
+
+- **An explicit `-std=c++11`.** There was no `-std=` flag at all, so the
+  dialect was whatever the compiler defaulted to, which drifts between
+  compiler versions.
+
+- **`make clean`, `install`, `info`.** `clean` removed only `*.o`, leaving
+  the binary; it now removes both. `install` takes `PREFIX` and `DESTDIR`.
+  `info` prints the detected platform and flags, for bug reports.
+
+- **A missing vendored `libhts.a` says so.** It used to surface as a wall of
+  undefined symbols from the linker; `make` now stops with the expected path,
+  the detected platform, and the `lib/build_htslib.sh` command that produces
+  it.
+
+- **The build is warning-free.** Beyond the x86 flags, seven uses of
+  `sprintf` into fixed buffers were deprecated on this toolchain and are now
+  `snprintf`. Two of those buffers were genuinely undersized for their
+  format: `param_t`'s `char[100]` with `%f` overflows at 1e92 and above
+  (101 bytes needed), and `int2str`'s `char[10]` is one byte short of `INT_MIN`
+  (`"-2147483648"` plus terminator). Neither is reachable from user input
+  today — both take values set in code — but the buffers now fit what the
+  types can hold.
+
+- **Stale tracked files removed.** `src/outfile.divstats.out2`, a result file
+  in the pre-2.0.0 space-separated header format, and `Makefile.lin`.
+  `.gitignore` now also covers `*.divstats.out*` and `*.sweepfinder.out`.
+
 ### Known issues carried forward
 
 

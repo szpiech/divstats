@@ -10,3 +10,5 @@ divstats
 lib/*/libgsl.a
 lib/*/libgslcblas.a
 include/gsl/
+*.divstats.out*
+*.sweepfinder.out

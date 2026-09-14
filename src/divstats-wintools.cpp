@@ -450,8 +450,12 @@ string dbl2str(double d) {
 }
 
 string int2str(int i) {
-	char buffer[10];
-	sprintf(buffer, "%d", i);
+	//buffer[10] with sprintf was one byte short of the type: INT_MIN prints
+	//as "-2147483648", 11 characters plus the terminator. Reachable only
+	//through a negative flag value today, but the buffer should fit what the
+	//type can hold.
+	char buffer[16];
+	snprintf(buffer, sizeof(buffer), "%d", i);
 	return string(buffer);
 }
 
