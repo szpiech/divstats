@@ -317,6 +317,32 @@ moving by up to roughly 19% is the more representative headline.
   `--sites --winsize 200 --partition 25 50 25` is refused with "Window
   partitions sum to 100 but must sum to 200 instead."
 
+### Changed -- parsing
+
+- **The genotype matrix is accumulated site-major and transposed once.** It
+  was appended per haplotype — one `push_back` into each of `nhaps` separate
+  buffers at every record, so 20 million scattered appends on a
+  400-haplotype × 50,000-site file, each landing on a different cache line,
+  with `nhaps` independent growth schedules. Records now write one contiguous
+  run of `nhaps` bytes (one `resize` per record, then plain stores), and the
+  matrix is transposed at the end in cache-sized blocks of loci. divstats'
+  own share of the parse fell from 0.133 s to 0.039 s, a factor of 3.4.
+
+- **`--threads` is handed to htslib's decoder.** This parallelises BGZF block
+  inflation, so it does something for a bgzipped VCF or a BCF and nothing for
+  plain gzip. Measured at 3–7% of the parse: the dominant cost in the text
+  path is `vcf_parse`, which is serial.
+
+Parse time, 400 haplotypes × 50,000 sites, 4 threads: plain gzip VCF 0.347 →
+0.288 s, bgzipped VCF 0.331 → 0.272 s, BCF 0.230 → 0.148 s. End to end over
+500 windows: 13.5%, 15.5% and 25.4% faster respectively. Output is
+byte-identical in all three formats at one and four threads, and under
+`--hemi`.
+
+The largest lever is the input format, not the code: BCF cuts htslib's share
+from 0.183 s to 0.032 s, because it removes the text parse entirely. This is
+now documented in the README.
+
 ### Known issues carried forward
 
 

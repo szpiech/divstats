@@ -47,7 +47,9 @@ NOTES\n\
 
 const string ARG_THREADS = "--threads";
 const int DEFAULT_THREADS = 1;
-const string HELP_THREADS = "The number of threads to spawn during computations.";
+const string HELP_THREADS = "Threads used for the per-window statistics, and handed to htslib\n\
+\tfor decoding. Decoding only divides up when there is a BGZF stream to\n\
+\tinflate (bgzipped VCF, BCF); on a plain-gzip VCF it does nothing.";
 
 // I/O flags
 const string ARG_FILENAME_TPED = "--tped";

@@ -45,7 +45,7 @@ struct HtsReader {
 };
 }
 
-void readVariantDataHTS(string filename, bool HEMI,
+void readVariantDataHTS(string filename, bool HEMI, int nThreads,
                         HaplotypeData **hapDataOut, MapData **mapDataOut)
 {
    HtsReader R;
@@ -64,6 +64,11 @@ void readVariantDataHTS(string filename, bool HEMI,
       throw 0;
    }
 
+   //Decoding runs in htslib's own thread pool when asked. This parallelises
+   //BGZF block inflation, so it does something for a bgzipped VCF or a BCF
+   //and nothing for plain gzip, which is a single deflate stream.
+   if (nThreads > 1) hts_set_opt(R.fp, HTS_OPT_NTHREADS, nThreads);
+
    R.hdr = bcf_hdr_read(R.fp);
    if (R.hdr == NULL) {
       cerr << "ERROR: Failed to read a VCF/BCF header from " << filename << ".\n";
@@ -78,10 +83,19 @@ void readVariantDataHTS(string filename, bool HEMI,
 
    int nhaps = HEMI ? nsmpl : 2 * nsmpl;
 
-   //Genotypes accumulate per haplotype as the file is read, because the locus
-   //count is not known until the end. The old reader learned it by reading the
-   //whole file first; growing these is what removes that pass.
-   vector< vector<char> > haps(nhaps);
+   //Genotypes accumulate as the file is read, because the locus count is not
+   //known until the end. The old reader learned it by reading the whole file
+   //first; growing this is what removes that pass.
+   //
+   //Accumulated SITE-MAJOR, in one buffer, and transposed once at the end.
+   //Appending per haplotype instead -- vector<vector<char> > haps(nhaps), one
+   //push_back per haplotype per record -- touched nhaps separate buffers at
+   //every record: 20 million scattered appends on a 400-haplotype file, each
+   //landing on a different cache line, plus nhaps independent growth
+   //schedules. Site-major makes each record one contiguous run of nhaps
+   //bytes, and the transpose is done in cache-sized blocks.
+   vector<char> siteMajor;
+   siteMajor.reserve((size_t)nhaps * 8192);
    vector<int> pos;
    vector<string> ids;
 
@@ -159,6 +173,13 @@ void readVariantDataHTS(string filename, bool HEMI,
          throw 0;
       }
 
+      //One resize per record, then plain stores: push_back per allele paid a
+      //capacity check on each of the nhaps writes.
+      size_t base = siteMajor.size();
+      siteMajor.resize(base + (size_t)nhaps);
+      char *w = &siteMajor[base];
+      int wi = 0;
+
       for (int i = 0; i < nsmpl; i++) {
          int32_t *g = R.gt + i * maxPloidy;
          for (int j = 0; j < wanted; j++) {
@@ -175,7 +196,7 @@ void readVariantDataHTS(string filename, bool HEMI,
                }
                allele = (char)('0' + idx);
             }
-            haps[HEMI ? i : 2 * i + j].push_back(allele);
+            w[wi++] = allele;
          }
       }
 
@@ -193,9 +214,23 @@ void readVariantDataHTS(string filename, bool HEMI,
    cerr << "Loading " << nhaps << " haplotypes and " << nloci << " loci...\n";
 
    HaplotypeData *hapData = initHaplotypeData(nhaps, (unsigned int)nloci);
-   for (int h = 0; h < nhaps; h++) {
-      //every haplotype advanced once per record, so all rows are nloci long
-      memcpy(hapData->data[h], &haps[h][0], (size_t)nloci * sizeof(char));
+
+   //Transpose site-major -> haplotype-major. Done in blocks of loci so that
+   //the source slab being read (BLOCK * nhaps bytes) stays resident while all
+   //nhaps destination rows are filled from it; the destination writes are
+   //contiguous within a row. A straight nhaps x nloci transpose instead
+   //re-reads the whole source once per haplotype.
+   const long BLOCK = 256;
+   for (long b = 0; b < nloci; b += BLOCK) {
+      long bend = (b + BLOCK < nloci) ? b + BLOCK : nloci;
+      for (int h = 0; h < nhaps; h++) {
+         char *dst = hapData->data[h];
+         const char *src = &siteMajor[(size_t)b * nhaps + h];
+         for (long l = b; l < bend; l++) {
+            dst[l] = *src;
+            src += nhaps;
+         }
+      }
    }
 
    MapData *mapData = initMapData((int)nloci);

@@ -351,7 +351,7 @@ int main(int argc, char *argv[])
       hapData = readHaplotypeDataTPED(tpedFilename);
     }
     else if (VCF){
-      readVariantDataHTS(vcfFilename, HEMI, &hapData, &vcfMap);
+      readVariantDataHTS(vcfFilename, HEMI, numThreads, &hapData, &vcfMap);
     }
     if (NEED_GMAP){
       //an explicit --map overrides the positions carried in the variant file

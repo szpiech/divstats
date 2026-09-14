@@ -32,7 +32,10 @@
 //Both output pointers are allocated here and owned by the caller; release them
 //with releaseHapData and releaseMapData as before. Throws 0 on any error, to
 //match the convention in divstats-data.cpp.
-void readVariantDataHTS(string filename, bool HEMI,
+//nThreads is handed to htslib's decoder thread pool. It helps only where
+//there is a BGZF stream to inflate in parallel (bgzipped VCF, BCF); on a
+//plain-gzip or uncompressed VCF there is nothing to divide up.
+void readVariantDataHTS(string filename, bool HEMI, int nThreads,
                         HaplotypeData **hapDataOut, MapData **mapDataOut);
 
 #endif

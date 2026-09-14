@@ -51,6 +51,24 @@ One chromosome per run, sorted by position, biallelic sites.
 Multi-chromosome and unsorted input are refused with a diagnostic rather than
 analysed incorrectly.
 
+## Performance
+
+Parsing dominates a typical run, and it is mostly the cost of turning VCF
+text into records — work that does not divide across threads. **BCF input is
+substantially faster and produces byte-identical output.** On a 400-haplotype
+× 50,000-site file, 500 windows of 100 SNPs, 4 threads:
+
+| input | parse | total |
+|---|---|---|
+| plain gzip VCF | 0.222 s | 0.348 s |
+| bgzipped VCF | 0.222 s | 0.328 s |
+| BCF | 0.067 s | 0.203 s |
+
+Convert once with `bcftools view -O b -o data.bcf data.vcf.gz`. `--threads`
+covers both the statistics and htslib's decoder, but the decoder only
+parallelises BGZF inflation — it does nothing for a plain-gzip VCF, and even
+for BGZF it is a few percent, because the text parse is serial.
+
 ## Windows
 
     --sites --winsize 100 --winstep 100     # 100 SNPs, tiling
