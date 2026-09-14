@@ -47,6 +47,8 @@ Run `make check` in `src/` after any change on this branch.
 | `48f8b15` | **U10** platform-detecting Makefile; warning-free build | no (byte-identical) |
 | `a5de078` | **U5 U9** `<out>.divstats.log` sidecar; `--precision` | no (byte-identical) |
 | `7504fdd` | **P2** site-major genotype fill + blocked transpose; htslib thread pool | no (byte-identical) |
+| `036ae89` | **P12** `--bp` windows start at the data, not coordinate 0 | yes: empty leading rows gone |
+| `a3d5560` | **P11** alleles stored two bits per site | no (byte-identical) |
 
 For the count and anything added after the rows above, ask git rather than
 trusting this table:
