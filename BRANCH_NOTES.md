@@ -46,6 +46,7 @@ Run `make check` in `src/` after any change on this branch.
 | `573c70d` | **U1 U2 U7** grouped `--help`, usage on bare run, progress | no (byte-identical) |
 | `48f8b15` | **U10** platform-detecting Makefile; warning-free build | no (byte-identical) |
 | `a5de078` | **U5 U9** `<out>.divstats.log` sidecar; `--precision` | no (byte-identical) |
+| `7504fdd` | **P2** site-major genotype fill + blocked transpose; htslib thread pool | no (byte-identical) |
 
 For the count and anything added after the rows above, ask git rather than
 trusting this table:
@@ -164,6 +165,12 @@ directory, that guard is doing its job — check `TMPDIR`.
 ## Performance, measured
 
 Each change was checked for output equivalence before its speed was recorded.
+
+> **Benchmark caveat.** The numbers for P1, P3, P5 and P8 below were taken on
+> a `bench/big400miss.vcf.gz` whose header never declared `##FORMAT=<ID=GT>`,
+> so htslib fell back to a string-typed GT on every record. The fixture was
+> regenerated with the declaration during P2; those rows are internally
+> consistent but are not directly comparable with the P2 figures.
 
 | change | effect | equivalence |
 |---|---|---|
