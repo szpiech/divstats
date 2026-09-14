@@ -38,9 +38,9 @@ double pi_window(HaplotypeData *hapData, pair_t* snpIndex);
 double pi_from_sfs(array_t *sfs);
 double pi_k(HaplotypeFrequencySpectrum *hfs, int k);
 double pi_k2(HaplotypeFrequencySpectrum *hfs, int k, pair_t *subset_snps = NULL);
-double pi_numerator_btw_pools(string *haps1, int length1, string *haps2, int length2, map<string, int> &hap2count, pair_t *subset_snps = NULL);
-double pi_numerator(string *haps, int length, map<string, int> &hap2count, pair_t *subset_snps = NULL);
-int hamming_dist_str(string one, string two, pair_t *subset_snps = NULL);
+double pi_numerator_btw_pools(string *haps1, int length1, string *haps2, int length2, const map<string, int> &hap2count, pair_t *subset_snps = NULL);
+double pi_numerator(string *haps, int length, const map<string, int> &hap2count, pair_t *subset_snps = NULL);
+int hamming_dist_str(const string &one, const string &two, pair_t *subset_snps = NULL);
 int hamming_dist_packed(const char *one, const char *two, long start, int length);
 
 double tajimaD_from_sfs(array_t *sfs, double pi = -9, double S = -9);

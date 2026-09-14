@@ -66,6 +66,11 @@ substantially faster and produces byte-identical output.** On a 400-haplotype
 
 Convert once with `bcftools view -O b -o data.bcf data.vcf.gz`.
 
+`--pik` cost per window scales with the square of the number of *distinct*
+haplotypes in that window, so it is far cheaper on data with missing
+genotypes (which exclude a haplotype from the spectrum) than on complete
+data, and it grows quickly with window width.
+
 Genotypes are held two bits per site rather than one byte, so the matrix is
 `nhaps × nloci / 4` bytes: 4.8 MB for 400 haplotypes × 50,000 sites, and
 4.7 GB rather than 18.6 GB for 2,000 haplotypes × 10M sites. `--threads`

@@ -390,6 +390,31 @@ now documented in the README.
   packed rows. Leaving the latter would have been a trap: both compile
   against a packed row and silently compare four sites per byte.
 
+### Changed -- the pairwise-difference loops
+
+- **Haplotype counts are hoisted out of the O(k²) pair loops.** Each pair
+  evaluated `hap2count[haps[i]] * hap2count[haps[j]]` *inside* the inner
+  loop: two red-black tree descents per pair, every node comparison an O(L)
+  string compare, for values that do not change — and the `i`-side lookup did
+  not even depend on `j`. They are now looked up once per haplotype.
+
+- **`hamming_dist_str` takes its strings by const reference.** It took both
+  by value, copying two window-length strings on every call, and nearly every
+  call comes from those inner loops.
+
+- **The spectrum is passed by const reference.** `operator[]` on a non-const
+  `std::map` *inserts* a zero entry for a key it does not find, so a lookup
+  miss would have silently added a zero-count haplotype to the spectrum
+  rather than being noticed. `const` makes that impossible to write, and the
+  lookup now reports a miss instead. The three `nhaps +=` sums outside the
+  pair loops were converted for the same reason.
+
+On 400 haplotypes with no missing data, where every haplotype in a window is
+distinct and `pi_numerator` runs 79,800 pairs per call: `--pik 2` over 200
+windows 0.769 → 0.244 s, `--pik 2 3 4 5` 2.784 → 0.655 s, `--pik 2` over 500-site
+windows 0.447 → 0.241 s. A parse-only control is unchanged, confirming the gain
+is in the statistics. Output is byte-identical.
+
 ### Known issues carried forward
 
 

@@ -40,11 +40,15 @@ int hamming_dist_packed(const char *one, const char *two, long start, int length
    return diff;
 }
 
-int hamming_dist_str(string one, string two, pair_t *subset_snps) {
+//Both strings were taken BY VALUE, so every call copied two window-length
+//strings -- from the O(k^2) inner loops below, which is where nearly all the
+//calls come from.
+int hamming_dist_str(const string &one, const string &two, pair_t *subset_snps) {
    int diff = 0, start, end;
    if(subset_snps == NULL){
+      if (one.empty()) return 0;     //else end would be (size_t)0 - 1
       start = 0;
-      end = one.length()-1;
+      end = (int)one.length() - 1;
    }
    else{
       start = subset_snps->start;
@@ -102,24 +106,61 @@ double ehhk_from_hfs(HaplotypeFrequencySpectrum * hfs, int k) {
    return (res / nCk(tot, 2));
 }
 
-double pi_numerator_btw_pools(string * haps1, int length1, string * haps2, int length2, map<string, int> &hap2count, pair_t *subset_snps) {
+//Counts are hoisted out of the pair loops. They were looked up as
+//hap2count[haps1[i]] * hap2count[haps2[j]] INSIDE the inner loop: two
+//red-black tree descents per pair, every node comparison an O(L) string
+//compare, for values that do not change across the loop. The i-side lookup
+//did not even depend on j.
+//
+//The map is also taken by CONST reference now. operator[] on a non-const map
+//INSERTS a zero entry for a key it does not find, so a lookup miss here would
+//have silently added a haplotype with count zero to the spectrum rather than
+//being noticed; const makes that impossible to write, and find() reports the
+//miss instead.
+static int hapCountOf(const map<string, int> &hap2count, const string &hap) {
+   map<string, int>::const_iterator it = hap2count.find(hap);
+   if (it == hap2count.end()) {
+      cerr << "ERROR: a haplotype passed to the pi numerator is not in the "
+           << "frequency spectrum it was drawn from.\n";
+      throw 0;
+   }
+   return it->second;
+}
+
+static void hapCounts(string *haps, int length, const map<string, int> &hap2count, vector<int> &out) {
+   out.resize(length);
+   for (int i = 0; i < length; i++) out[i] = hapCountOf(hap2count, haps[i]);
+}
+
+double pi_numerator_btw_pools(string * haps1, int length1, string * haps2, int length2, const map<string, int> &hap2count, pair_t *subset_snps) {
    double num = 0;
 
+   vector<int> c1, c2;
+   hapCounts(haps1, length1, hap2count, c1);
+   hapCounts(haps2, length2, hap2count, c2);
+
    for (int i = 0; i < length1; i++) {
+      const string &hi = haps1[i];
+      const int ci = c1[i];
       for (int j = 0; j < length2; j++) {
-         num += hamming_dist_str(haps1[i], haps2[j], subset_snps) * hap2count[haps1[i]] * hap2count[haps2[j]];
+         num += hamming_dist_str(hi, haps2[j], subset_snps) * ci * c2[j];
       }
    }
 
    return num;
 }
 
-double pi_numerator(string * haps, int length, map<string, int> &hap2count, pair_t *subset_snps) {
+double pi_numerator(string * haps, int length, const map<string, int> &hap2count, pair_t *subset_snps) {
    double num = 0;
 
+   vector<int> cnt;
+   hapCounts(haps, length, hap2count, cnt);
+
    for (int i = 0; i < length; i++) {
+      const string &hi = haps[i];
+      const int ci = cnt[i];
       for (int j = i + 1; j < length; j++) {
-         num += hamming_dist_str(haps[i], haps[j], subset_snps) * hap2count[haps[i]] * hap2count[haps[j]];
+         num += hamming_dist_str(hi, haps[j], subset_snps) * ci * cnt[j];
       }
    }
 
@@ -258,7 +299,7 @@ double pi_k2(HaplotypeFrequencySpectrum * hfs, int k, pair_t *subset_snps/*this 
    double denominator;
 
    if (numHapsMissing == 0) {
-      for (int i = 0; i < k; i++) nhaps += hfs->hap2count[haps[i]];
+      for (int i = 0; i < k; i++) nhaps += hapCountOf(hfs->hap2count, haps[i]);
       denominator = (nhaps) * (nhaps - 1) * 0.5;
       double res = pi_numerator(haps, k, hfs->hap2count, subset_snps) / denominator;
       delete [] haps;//this path used to return without releasing haps
@@ -267,10 +308,10 @@ double pi_k2(HaplotypeFrequencySpectrum * hfs, int k, pair_t *subset_snps/*this 
    else {
       for (int i = 0; i < k; i++) {
          if (i < howmanyUniqHaps) {
-            nhaps += hfs->hap2count[haps[i]];
+            nhaps += hapCountOf(hfs->hap2count, haps[i]);
          }
          else {
-            nhaps += hfs->hap2count[equalFreqHaps[i - howmanyUniqHaps]];
+            nhaps += hapCountOf(hfs->hap2count, equalFreqHaps[i - howmanyUniqHaps]);
          }
       }
       denominator = (nhaps) * (nhaps - 1) * 0.5;
@@ -359,14 +400,21 @@ double pi_k(HaplotypeFrequencySpectrum * hfs, int k) {
    }
 
    double pi_k = 0;
+   //the same hoist as in pi_numerator: one lookup per haplotype, not two per
+   //pair, and the sum for nhaps reuses them
+   vector<int> cnt;
+   hapCounts(haps, k, hfs->hap2count, cnt);
+
    int nhaps = 0;
-   for (i = 0; i < k; i++) nhaps += hfs->hap2count[haps[i]];
+   for (i = 0; i < k; i++) nhaps += cnt[i];
 
    double denominator = (nhaps) * (nhaps - 1) * 0.5;
 
    for (i = 0; i < k; i++) {
+      const string &hi = haps[i];
+      const int ci = cnt[i];
       for (int j = i + 1; j < k; j++) {
-         pi_k += hamming_dist_str(haps[i], haps[j]) * hfs->hap2count[haps[i]] * hfs->hap2count[haps[j]];
+         pi_k += hamming_dist_str(hi, haps[j]) * ci * cnt[j];
       }
    }
 
