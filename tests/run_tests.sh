@@ -107,6 +107,31 @@ build_fixtures() {
   awk '!/^#/ {printf "%s\tsnp%d\t%.6f\t%d\n", $1, ++n, $2/1000000.0, $2}' \
       "$SCRATCH/core.vcf" > "$SCRATCH/core.map"
 
+  # 2000 sites with a COVERAGE TAIL: 3% missing genotypes everywhere except
+  # four sites that are mostly uncalled. The default target is the n reachable
+  # by 99.9% of sites, and 0.1% of 2000 is 2 -- so this file is large enough
+  # for that rule to differ from "the n every site can reach", which the two
+  # badly-covered sites would otherwise drag down for the whole run. The 400
+  # site fixtures cannot exercise it: 0.1% of 400 rounds to index 0.
+  awk -v seed=23 'BEGIN{
+         srand(seed)
+         print "##fileformat=VCFv4.2"; print "##contig=<ID=chr1>"
+         line = "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT"
+         for (i = 0; i < 8; i++) line = line "\ts" i
+         print line
+         bad[137]=1; bad[642]=1; bad[1288]=1; bad[1901]=1
+         for (s = 1; s <= 2000; s++) {
+           af = rand()
+           row = "chr1\t" (s*100) "\t.\tA\tC\t.\tPASS\t.\tGT"
+           mrate = (s in bad) ? 0.75 : 0.03
+           for (i = 0; i < 8; i++) {
+             if (rand() < mrate) row = row "\t.|."
+             else row = row "\t" (rand()<af?1:0) "|" (rand()<af?1:0)
+           }
+           print row
+         }
+       }' | gzip -c > "$SCRATCH/covtail.vcf.gz"
+
   # Same SNPs with a recombination hotspot: 1 cM/Mb outside [80kb,120kb] and
   # 20 cM/Mb inside. A fixed GENETIC width therefore covers far fewer base
   # pairs in the hotspot than the linear map does, which is the whole reason
@@ -320,6 +345,13 @@ define_case missing-nosub     table -- --vcf "$M" --sites --winsize 100 --winste
 define_case missing-constn    table -- --vcf "$M" --sites --winsize 100 --winstep 100 --pi --s --d --h --const-n-sub
 # The pre-2.0.0 sampling: each window projected to its own minimum, so nhaps
 # varies between windows and the statistics are not comparable across them.
+# The 99.9% default on a file big enough for it to matter: the two worst sites
+# are excluded rather than dragging every window down to the n they can reach.
+# covtail-strict asks for n = 4, the exclude-nothing target this file reports,
+# and must differ: lower n, no site dropped, and no nSNPsUsed column at all
+# since nothing can be excluded at that target.
+define_case covtail-default   table -- --vcf "$SCRATCH/covtail.vcf.gz" --sites --winsize 200 --winstep 200 --pi --s --d --h
+define_case covtail-strict    table -- --vcf "$SCRATCH/covtail.vcf.gz" --sites --winsize 200 --winstep 200 --pi --s --d --h --target-n 4
 define_case window-n-sub      table -- --vcf "$M" --sites --winsize 100 --winstep 100 --pi --s --d --h --window-n-sub
 # An explicit target above the global minimum. Sites too sparse to reach it are
 # excluded, which is what nSNPsUsed reports -- a column that appears only here.

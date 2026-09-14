@@ -96,18 +96,23 @@ to its own minimum observed sample size, so `n` varied with local missingness
 and π, S, *D* and *H* were not comparable between windows — and `n` was not in
 the output, so nothing downstream could detect it.
 
-The default is the largest `n` every site in the file can reach
-(`nhaps - maxMissing`), which excludes no site. That value is set by the single
-worst-covered site, so on real data it can sit far below the typical site:
+The default is the largest `n` reachable by **99.9% of sites**. Taking the
+largest reachable by *every* site instead lets the single worst-covered site
+set `n` for the whole run — on data with a coverage tail that can cost more
+than half the sample for the sake of a handful of sites. Up to 0.1% of sites
+are therefore excluded, and the exclude-nothing value is printed so it can be
+restored exactly:
 
-    Projecting every window to n = 168 haplotypes (50000 of 50000 sites usable,
-      the largest n that excludes no site).
-      raising it would cost sites:  n=367 keeps 99.9% of sites; set with --target-n.
+    Projecting every window to n = 6 haplotypes (1998 of 2000 sites usable, 99.90%).
+      n = 4 would exclude no site; --target-n sets either explicitly.
+
+Files with fewer than 1000 sites are unaffected — 0.1% rounds to zero sites, so
+nothing is dropped on a fraction too small to resolve.
 
 `--target-n N` projects to `N` instead and excludes sites observed in fewer
-than `N` haplotypes — they cannot be projected upward. The number that actually
-contributed appears in an `nSNPsUsed` column, which is emitted only when
-`--target-n` is given.
+than `N` haplotypes — they cannot be projected upward. Whenever any site is
+excluded, including under the default, the number that actually contributed
+appears in an `nSNPsUsed` column.
 
 `--window-n-sub` restores the pre-2.0.0 per-window minimum. It maximises each
 window's `n` in isolation, but the windows are then not comparable.

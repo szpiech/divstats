@@ -153,11 +153,15 @@ moving by up to roughly 19% is the more representative headline.
   and *H* for any input with missing genotypes -- on the test fixture,
   74 of 200 windows move at `--winsize 2`, by up to a factor of 2.5 where the
   old per-window `n` happened to be high.
-- The default `n` is the largest every site can reach, which excludes nothing.
-  Because one badly-covered site sets it, startup reports what raising it would
-  cost in sites, and **`--target-n N`** projects to `N` instead, excluding
-  sites too sparse to reach it and reporting the contributing count in
-  **`nSNPsUsed`**.
+- The default `n` is the largest reachable by **99.9% of sites**, so up to 0.1%
+  of sites are excluded. Requiring every site to reach it instead lets the
+  single worst-covered site set `n` for the whole run: simulating 400
+  haplotypes at 2% missing with 0.1% of sites at 50% missing, that rule gives
+  `n = 168` against a median site `n` of 392 — a 57% loss of sample for 50
+  sites out of 50,000. Startup prints the exclude-nothing value so
+  **`--target-n N`** can restore it, or raise `n` further; whenever any site is
+  excluded the contributing count appears in **`nSNPsUsed`**. Files with fewer
+  than 1000 sites are unaffected, since 0.1% of them rounds to no site.
 - **`--window-n-sub`** restores the previous per-window behaviour.
   **`--const-n-sub` is now a no-op**: it selected what is now the default, and
   its regression case shares the default's expected output to assert that.

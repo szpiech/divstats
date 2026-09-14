@@ -360,9 +360,40 @@ int main(int argc, char *argv[])
   if (WINDOW_N) {
     TARGET_N = 0;   //per-window minimum
   }
-  else if (!TARGET_N_EXPLICIT) {
-    TARGET_N = globalMaxN;
+  //Per-site sample sizes, sorted: needed both to pick the default and to
+  //report what other choices would cost.
+  vector<int> perSite;
+  int nExcludeNone = freqData->nhaps;   //largest n reachable by EVERY site
+  int nKeep999 = freqData->nhaps;       //largest n reachable by 99.9% of them
+  if (freqData->nloci > 0) {
+    perSite.resize(freqData->nloci);
+    for (int i = 0; i < freqData->nloci; i++)
+      perSite[i] = freqData->nhaps - freqData->nmissing[i];
+    sort(perSite.begin(), perSite.end());
+    nExcludeNone = perSite[0];
+    //Sorted ascending, at most idx sites fall below perSite[idx], so keeping
+    //from perSite[idx] up retains at least 99.9%. For fewer than 1000 sites
+    //idx is 0 and this is exactly nExcludeNone -- nothing is dropped from a
+    //small file on the strength of a fraction that cannot be resolved.
+    int idx = (int)(0.001 * freqData->nloci);
+    if (idx >= freqData->nloci) idx = freqData->nloci - 1;
+    nKeep999 = perSite[idx];
   }
+
+  //NOT an unconditional if: --window-n-sub has already set TARGET_N to 0,
+  //meaning "each window's own minimum", and must not be overwritten here.
+  if (!TARGET_N_EXPLICIT && !WINDOW_N) {
+    //The default is the n reachable by 99.9% of sites, not by all of them.
+    //The all-sites value is set by the single worst-covered site in the file:
+    //on data with a coverage tail it can sit far below the typical site, so
+    //the whole run pays for a handful of sites. Dropping up to 0.1% of them
+    //buys back that sample. The all-sites value is printed below so it can be
+    //restored exactly with --target-n.
+    TARGET_N = nKeep999;
+  }
+
+  //true when some site cannot reach the target and will be dropped
+  bool CAN_EXCLUDE = (SFS_SUB && !WINDOW_N && TARGET_N > nExcludeNone);
 
   if (SFS_SUB && !WINDOW_N) {
     if (TARGET_N > freqData->nhaps) {
@@ -375,33 +406,17 @@ int main(int argc, char *argv[])
       if (freqData->nhaps - freqData->nmissing[i] >= TARGET_N) usable++;
     }
     cerr << "Projecting every window to n = " << TARGET_N << " haplotypes ("
-         << usable << " of " << freqData->nloci << " sites usable"
-         << (TARGET_N_EXPLICIT ? "" : ", the largest n that excludes no site") << ").\n";
+         << usable << " of " << freqData->nloci << " sites usable";
+    if (freqData->nloci > 0) {
+      char buf[32];
+      snprintf(buf, sizeof(buf), ", %.2f%%", 100.0 * usable / freqData->nloci);
+      cerr << buf;
+    }
+    cerr << ").\n";
 
-    if (!TARGET_N_EXPLICIT && freqData->nloci > 0) {
-      //What would a slightly higher n cost? Sort the per-site sample sizes and
-      //read off the n reachable by 99.9%, 99% and 95% of sites. If one bad
-      //site is holding the whole run down this makes it obvious immediately.
-      vector<int> perSite(freqData->nloci);
-      for (int i = 0; i < freqData->nloci; i++) perSite[i] = freqData->nhaps - freqData->nmissing[i];
-      sort(perSite.begin(), perSite.end());
-      const double keep[3] = {0.999, 0.99, 0.95};
-      bool worth = false;
-      int lastN = -1;
-      string line = "  raising it would cost sites:";
-      for (int k = 0; k < 3; k++) {
-        int idx = (int)((1.0 - keep[k]) * freqData->nloci);
-        if (idx >= freqData->nloci) idx = freqData->nloci - 1;
-        int n_k = perSite[idx];
-        if (n_k > TARGET_N && n_k != lastN) {
-          worth = true;
-          lastN = n_k;
-          char buf[96];
-          snprintf(buf, sizeof(buf), "  n=%d keeps %.1f%% of sites;", n_k, 100.0 * keep[k]);
-          line += buf;
-        }
-      }
-      if (worth) cerr << line << " set with --target-n.\n";
+    if (!TARGET_N_EXPLICIT && nExcludeNone < TARGET_N) {
+      cerr << "  n = " << nExcludeNone << " would exclude no site; "
+           << "--target-n sets either explicitly.\n";
     }
   }
   else if (WINDOW_N) {
@@ -512,11 +527,14 @@ int main(int argc, char *argv[])
   //pandas.read_csv(sep='\t') mis-aligned. There was a trailing space too.
   //nhaps is the sample size the window's statistics refer to. Without it,
   //output from different runs -- or from before 2.0.0, where it varied by
-  //window -- cannot be told apart or pooled safely. nSNPsUsed appears only
-  //when --target-n was given explicitly, because that is the only setting
-  //that can exclude sites: the default target is reachable by every site.
+  //window -- cannot be told apart or pooled safely.
+  //
+  //nSNPsUsed appears whenever the resolved target is above the n every site
+  //can reach, i.e. whenever any site is excluded. That includes the DEFAULT,
+  //which keeps 99.9% of sites -- keying this on --target-n being typed would
+  //let nSNPs silently overstate what fed the statistic on a default run.
   fout << "chr\tstart\tend\tnbps\tnSNPs\tnhaps";
-  if (TARGET_N_EXPLICIT) fout << "\tnSNPsUsed";
+  if (CAN_EXCLUDE) fout << "\tnSNPsUsed";
   for (unsigned int i = 0; i < colNames.size(); i++) fout << "\t" << colNames[i];
   fout << "\n";
   for (int w = 0; w < windows->size(); w++) {
@@ -526,7 +544,7 @@ int main(int argc, char *argv[])
       << windows->at(w)->winEnd - windows->at(w)->winStart + 1 << "\t"
       << windows->at(w)->end - windows->at(w)->start + 1
       << "\t" << nhapsUsed[w];
-    if (TARGET_N_EXPLICIT) fout << "\t" << nSitesUsed[w];
+    if (CAN_EXCLUDE) fout << "\t" << nSitesUsed[w];
     for (int s = 0; s < numStats; s++) {
       //An undefined statistic is NaN internally; what reaches the file is the
       //--na-string token. The default, "nan", is what iostream would print
