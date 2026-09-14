@@ -2,11 +2,24 @@
 #define __DIVSTATS_WINTOOLS_H__
 
 #include <vector>
+#include <pthread.h>
+#include <ctime>
 #include <map>
 #include "divstats-data.h"
 #include "divstats-winstats.h"
 #include "param_t.h"
 #include "divstats-cli.h"
+
+//Shared progress counter for the worker threads.
+struct progress_t
+{
+    pthread_mutex_t lock;
+    long done;
+    long total;
+    int lastTenth;       //highest 10% mark already reported
+    time_t start;
+    bool announced;      //true once anything has been printed
+};
 
 struct work_order_t
 {
@@ -20,7 +33,14 @@ struct work_order_t
 
     double **results;
     //ofstream *flog;
-    //Bar *bar;
+
+    //Progress reporting. The window loop used to print nothing at all
+    //between "Calculating N statistics in M windows." and the output file,
+    //so a multi-hour run gave no sign of life. Threads share one counter
+    //under a mutex -- the lock is taken once per window, which is nothing
+    //next to the window's own work, and it keeps the count exact rather
+    //than reading another thread's int without synchronisation.
+    progress_t *progress;
 
     param_t *params;
 

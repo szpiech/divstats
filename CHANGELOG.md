@@ -215,6 +215,39 @@ moving by up to roughly 19% is the more representative headline.
   subsampling this changed 22 of 200 windows at `--winsize 2` and 8 of 80 at
   `--winsize 5` on the 400-site test fixture, and none at `--winsize 100`.
 
+### Added -- usable command line
+
+- **`--help` is grouped, with a usage line and examples.** It was a flat
+  alphabetical dump in `std::map` order, so I/O, windowing, statistics and
+  missing-data options interleaved, with no usage line and `PREAMBLE` set to
+  the empty string. Options now print under *Input*, *Windows*, *Statistics*,
+  *Sample size and missing data*, *Output* and *Other*, followed by three
+  worked examples and a note on the sample-size and na-string behaviour.
+
+  `param_t` gained `setSectionOrder()` and `setEpilogue()`. The section key is
+  the `label` argument `addFlag` already took and which only `printHelp` ever
+  read, so no call-site signature changed. A flag whose label is not in the
+  declared order still prints, under a trailing *Uncategorised* heading, so
+  forgetting to section a new flag cannot hide it. With no order set,
+  `printHelp` reproduces the old flat listing.
+
+- **`--help` exits 0.** It exited 1, because `param_t` signals a help request
+  with the same `throw 0` it uses for a bad flag and `main` could not tell
+  them apart. Both `--help` and `--version` are now handled in `main` before
+  parsing, so they work alongside otherwise-invalid arguments.
+
+- **A bare `divstats` prints the usage and exits 1.** It used to reach
+  validation and print four errors -- no window mode, window size 0, window
+  step 0, no data file -- which is an unhelpful first contact with the tool.
+
+- **Progress on long runs.** Nothing was printed between "Calculating N
+  statistics in M windows." and the output file, so a multi-hour run gave no
+  sign of life; the progress-bar plumbing in `work_order_t` had been
+  commented out. Worker threads now share a counter under a mutex and report
+  each 10% of windows to stderr, but only once the run has taken two seconds,
+  so short runs stay silent. Measured cost of the lock is +0.3% at one thread
+  and +0.4% at four, taking it once per window.
+
 ### Known issues carried forward
 
 

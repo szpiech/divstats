@@ -148,6 +148,7 @@ void calc_stats(void *order) {
 	int TARGET_N = p->TARGET_N;
 	int *nhapsUsed = p->nhapsUsed;
 	int *nSitesUsed = p->nSitesUsed;
+	progress_t *progress = p->progress;
 
 	int numThreads = params->getIntFlag(ARG_THREADS);
 	//These must be initialized: each is assigned only inside a conditional
@@ -360,6 +361,23 @@ void calc_stats(void *order) {
 		for (unsigned int c = 0; c < ehh_hfs_cache.size(); c++)
 			releaseHaplotypeFrequencySpectrum(ehh_hfs_cache[c]);
 		ehh_hfs_cache.clear();
+
+		//Progress. Only report once the run has been going a couple of
+		//seconds, so short runs stay silent and a scan that takes hours
+		//still reports every 10%.
+		if (progress != NULL) {
+			pthread_mutex_lock(&progress->lock);
+			progress->done++;
+			int tenth = (int)((10 * progress->done) / progress->total);
+			if (tenth > progress->lastTenth &&
+			    difftime(time(NULL), progress->start) >= 2.0) {
+				progress->lastTenth = tenth;
+				progress->announced = true;
+				cerr << "  " << (10 * tenth) << "% (" << progress->done
+				     << " of " << progress->total << " windows)\n";
+			}
+			pthread_mutex_unlock(&progress->lock);
+		}
 
 		//The header is built independently in main, by buildColumnNames, from
 		//the same flags. If the two ever disagree the columns silently

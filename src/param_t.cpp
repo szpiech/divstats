@@ -218,15 +218,58 @@ void param_t::printHelp()
 
     cerr << preamble << endl;
 
-    cerr << "----------Command Line Arguments----------\n\n";
-
-    for (it = help.begin(); it != help.end(); it++)
+    //help is a std::map, so iterating it yields flags in alphabetical order
+    //with I/O, windowing, statistics and missing-data options interleaved.
+    //Group by the label instead, in the order the caller declared, and fall
+    //back to the old flat listing when no order was set.
+    if (sectionOrder.empty())
     {
-        if (labels[(*it).first].compare("SILENT") != 0)
+        cerr << "----------Command Line Arguments----------\n\n";
+        for (it = help.begin(); it != help.end(); it++)
         {
+            if (labels[(*it).first].compare("SILENT") != 0)
+            {
+                cerr << (*it).first << " " << (*it).second << "\n\n";
+            }
+        }
+        if (!epilogue.empty()) cerr << epilogue << endl;
+        return;
+    }
+
+    //Track what has been printed so an unsectioned flag still appears.
+    map<string, bool> shown;
+    for (unsigned int k = 0; k < sectionOrder.size(); k++)
+    {
+        bool headerPrinted = false;
+        for (it = help.begin(); it != help.end(); it++)
+        {
+            if (labels[(*it).first].compare("SILENT") == 0) continue;
+            if (labels[(*it).first].compare(sectionOrder[k]) != 0) continue;
+            if (!headerPrinted)
+            {
+                cerr << "\n" << sectionOrder[k] << "\n";
+                cerr << string(sectionOrder[k].length(), '-') << "\n\n";
+                headerPrinted = true;
+            }
             cerr << (*it).first << " " << (*it).second << "\n\n";
+            shown[(*it).first] = true;
         }
     }
+
+    bool otherPrinted = false;
+    for (it = help.begin(); it != help.end(); it++)
+    {
+        if (labels[(*it).first].compare("SILENT") == 0) continue;
+        if (shown.count((*it).first) != 0) continue;
+        if (!otherPrinted)
+        {
+            cerr << "\nUncategorised\n-------------\n\n";
+            otherPrinted = true;
+        }
+        cerr << (*it).first << " " << (*it).second << "\n\n";
+    }
+
+    if (!epilogue.empty()) cerr << epilogue << endl;
 
     return;
 }
@@ -557,7 +600,10 @@ bool param_t::flagExists(string flag)
 
 param_t::param_t()
 {
-    this->addFlag(ARG_HELP, false, "__help", "Prints this help dialog.");
+    //"Other" rather than a private label, so a caller using setSectionOrder
+    //can place --help in a section of its own choosing instead of having it
+    //fall through to the uncategorised list.
+    this->addFlag(ARG_HELP, false, "Other", "Prints this help dialog and exits.");
 }
 
 bool param_t::getBoolFlag(string flag)
@@ -635,5 +681,17 @@ vector<char> param_t::getCharListFlag(string flag)
 void param_t::setPreamble(string str)
 {
     preamble = str;
+    return;
+}
+
+void param_t::setSectionOrder(vector<string> sections)
+{
+    sectionOrder = sections;
+    return;
+}
+
+void param_t::setEpilogue(string str)
+{
+    epilogue = str;
     return;
 }

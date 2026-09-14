@@ -172,6 +172,23 @@ Tab-separated, to `<out>.divstats.out`:
 `start`/`end` are the window's first and last SNP positions, `nbps` its span,
 `nSNPs` the sites it contains. Undefined windows are written as `-999`.
 
+## Getting help
+
+    divstats --help        # grouped option list with examples; exits 0
+    divstats --version     # version to stdout; exits 0
+    divstats               # usage; exits 1
+
+Options are grouped under *Input*, *Windows*, *Statistics*, *Sample size and
+missing data*, *Output* and *Other*, in that order, with worked examples after
+the list.
+
+## Progress
+
+Runs print a line to stderr at each 10% of windows completed, but only once a
+run has been going for two seconds — short runs stay quiet. Output goes to
+stdout and the output file, so progress can be discarded with `2>/dev/null`
+without losing anything.
+
 ## Reproducibility
 
 Statistics changed in 2.0.0 for any input with missing genotypes — see

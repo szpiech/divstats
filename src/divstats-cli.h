@@ -8,7 +8,42 @@
 //output in one analysis.
 const string VERSION = "2.0.0";
 
-const string PREAMBLE = "";
+const string PREAMBLE = "\n\
+divstats v" + VERSION + " -- window-based diversity statistics\n\
+\n\
+USAGE:  divstats --vcf <file> (--sites | --bp) --winsize <n> --winstep <n> \\\n\
+                 <statistic> [<statistic> ...] --out <prefix>\n\
+\n\
+Reads VCF, bgzipped VCF, BCF or TPED and writes one row per window to\n\
+<prefix>.divstats.out. Every statistic is optional; ask for at least one.\n\
+Input must be a single chromosome, sorted by position.";
+
+const string EPILOGUE = "\n\
+EXAMPLES\n\
+--------\n\
+\n\
+  Nucleotide diversity, segregating sites, Tajima's D and Fay & Wu's H in\n\
+  non-overlapping 100-SNP windows:\n\
+\n\
+    divstats --vcf chr2.vcf.gz --sites --winsize 100 --winstep 100 \\\n\
+             --pi --s --d --h --out chr2\n\
+\n\
+  The same in 10 kb windows sliding by 2 kb:\n\
+\n\
+    divstats --vcf chr2.vcf.gz --bp --winsize 10000 --winstep 2000 \\\n\
+             --pi --s --d --h --out chr2\n\
+\n\
+  EHH in 20- and 50-SNP sub-windows, on 8 threads:\n\
+\n\
+    divstats --vcf chr2.bcf --sites --winsize 200 --winstep 200 \\\n\
+             --ehh 20 50 --threads 8 --out chr2\n\
+\n\
+NOTES\n\
+-----\n\
+\n\
+  With missing genotypes every window is projected to one sample size, fixed\n\
+  for the whole run and reported in the nhaps column; see --target-n. Windows\n\
+  where a statistic is undefined are written as nan; see --na-string.";
 
 const string ARG_THREADS = "--threads";
 const int DEFAULT_THREADS = 1;

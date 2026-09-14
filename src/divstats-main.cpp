@@ -49,43 +49,73 @@ int main(int argc, char *argv[])
   param_t params;
   params.setPreamble(PREAMBLE);
 
-  params.addFlag(ARG_THREADS, DEFAULT_THREADS, "", HELP_THREADS);
+  params.addFlag(ARG_THREADS, DEFAULT_THREADS, "Other", HELP_THREADS);
 
   // I/O flags
-  params.addFlag(ARG_FILENAME_TPED, DEFAULT_FILENAME_TPED, "", HELP_FILENAME_TPED);
-  params.addFlag(ARG_OUTFILE, DEFAULT_OUTFILE, "", HELP_OUTFILE);
-  params.addFlag(ARG_FILENAME_POP1_VCF, DEFAULT_FILENAME_POP1_VCF, "", HELP_FILENAME_POP1_VCF);
-  params.addFlag(ARG_FILENAME_MAP, DEFAULT_FILENAME_MAP, "", HELP_FILENAME_MAP);
-  params.addFlag(ARG_HEMI, DEFAULT_HEMI, "", HELP_HEMI);
+  params.addFlag(ARG_FILENAME_TPED, DEFAULT_FILENAME_TPED, "Input", HELP_FILENAME_TPED);
+  params.addFlag(ARG_OUTFILE, DEFAULT_OUTFILE, "Output", HELP_OUTFILE);
+  params.addFlag(ARG_FILENAME_POP1_VCF, DEFAULT_FILENAME_POP1_VCF, "Input", HELP_FILENAME_POP1_VCF);
+  params.addFlag(ARG_FILENAME_MAP, DEFAULT_FILENAME_MAP, "Input", HELP_FILENAME_MAP);
+  params.addFlag(ARG_HEMI, DEFAULT_HEMI, "Input", HELP_HEMI);
     
   // Window control flags
-  params.addFlag(ARG_BP, DEFAULT_BP, "", HELP_BP);
-  params.addFlag(ARG_SITES, DEFAULT_SITES, "", HELP_SITES);
-  params.addFlag(ARG_WINSIZE, DEFAULT_WINSIZE, "", HELP_WINSIZE);
-  params.addFlag(ARG_WINSTEP, DEFAULT_WINSTEP, "", HELP_WINSTEP);
-  params.addListFlag(ARG_PARTITION, DEFAULT_PARTITION, "", HELP_PARTITION);
+  params.addFlag(ARG_BP, DEFAULT_BP, "Windows", HELP_BP);
+  params.addFlag(ARG_SITES, DEFAULT_SITES, "Windows", HELP_SITES);
+  params.addFlag(ARG_WINSIZE, DEFAULT_WINSIZE, "Windows", HELP_WINSIZE);
+  params.addFlag(ARG_WINSTEP, DEFAULT_WINSTEP, "Windows", HELP_WINSTEP);
+  params.addListFlag(ARG_PARTITION, DEFAULT_PARTITION, "Windows", HELP_PARTITION);
 
   // Statistics flags
-  params.addFlag(ARG_PI, DEFAULT_PI, "", HELP_PI);
-  params.addListFlag(ARG_PIK, DEFAULT_PIK, "", HELP_PIK);
-  params.addFlag(ARG_SEGSITES, DEFAULT_SEGSITES, "", HELP_SEGSITES);
-  params.addListFlag(ARG_EHH, DEFAULT_EHH, "", HELP_EHH);
-  params.addListFlag(ARG_EHHK, DEFAULT_EHHK, "", HELP_EHHK);
-  params.addFlag(ARG_TAJ_D, DEFAULT_TAJ_D, "", HELP_TAJ_D);
-  params.addFlag(ARG_FAY_WU_H, DEFAULT_FAY_WU_H, "", HELP_FAY_WU_H);
+  params.addFlag(ARG_PI, DEFAULT_PI, "Statistics", HELP_PI);
+  params.addListFlag(ARG_PIK, DEFAULT_PIK, "Statistics", HELP_PIK);
+  params.addFlag(ARG_SEGSITES, DEFAULT_SEGSITES, "Statistics", HELP_SEGSITES);
+  params.addListFlag(ARG_EHH, DEFAULT_EHH, "Statistics", HELP_EHH);
+  params.addListFlag(ARG_EHHK, DEFAULT_EHHK, "Statistics", HELP_EHHK);
+  params.addFlag(ARG_TAJ_D, DEFAULT_TAJ_D, "Statistics", HELP_TAJ_D);
+  params.addFlag(ARG_FAY_WU_H, DEFAULT_FAY_WU_H, "Statistics", HELP_FAY_WU_H);
 
   // Other flags
-  params.addFlag(ARG_EHH_PART, DEFAULT_EHH_PART, "", HELP_EHH_PART);
-  params.addFlag(ARG_NO_SFS_SUB, DEFAULT_NO_SFS_SUB, "", HELP_NO_SFS_SUB);
-  params.addFlag(ARG_CONST_N_SUB, DEFAULT_CONST_N_SUB, "", HELP_CONST_N_SUB);
-  params.addFlag(ARG_2_SWEEPFINDER, DEFAULT_2_SWEEPFINDER, "", HELP_2_SWEEPFINDER);
-  params.addFlag(ARG_PMAP, DEFAULT_PMAP, "", HELP_PMAP);
-  params.addFlag(ARG_NA_STRING, DEFAULT_NA_STRING, "", HELP_NA_STRING);
-  params.addFlag(ARG_VERSION, DEFAULT_VERSION, "", HELP_VERSION);
-  params.addFlag(ARG_TARGET_N, DEFAULT_TARGET_N, "", HELP_TARGET_N);
-  params.addFlag(ARG_WINDOW_N_SUB, DEFAULT_WINDOW_N_SUB, "", HELP_WINDOW_N_SUB);
-  params.addListFlag(ARG_EHH_CM, DEFAULT_EHH_CM, "", HELP_EHH_CM);
-  
+  params.addFlag(ARG_EHH_PART, DEFAULT_EHH_PART, "Statistics", HELP_EHH_PART);
+  params.addFlag(ARG_NO_SFS_SUB, DEFAULT_NO_SFS_SUB, "Sample size and missing data", HELP_NO_SFS_SUB);
+  params.addFlag(ARG_CONST_N_SUB, DEFAULT_CONST_N_SUB, "Sample size and missing data", HELP_CONST_N_SUB);
+  params.addFlag(ARG_2_SWEEPFINDER, DEFAULT_2_SWEEPFINDER, "Output", HELP_2_SWEEPFINDER);
+  params.addFlag(ARG_PMAP, DEFAULT_PMAP, "Statistics", HELP_PMAP);
+  params.addFlag(ARG_NA_STRING, DEFAULT_NA_STRING, "Output", HELP_NA_STRING);
+  params.addFlag(ARG_VERSION, DEFAULT_VERSION, "Other", HELP_VERSION);
+  params.addFlag(ARG_TARGET_N, DEFAULT_TARGET_N, "Sample size and missing data", HELP_TARGET_N);
+  params.addFlag(ARG_WINDOW_N_SUB, DEFAULT_WINDOW_N_SUB, "Sample size and missing data", HELP_WINDOW_N_SUB);
+  params.addListFlag(ARG_EHH_CM, DEFAULT_EHH_CM, "Statistics", HELP_EHH_CM);
+
+  //Section order for --help. A flag whose label is not named here still
+  //prints, under a trailing "Other" heading, so sectioning a new flag can be
+  //forgotten without hiding it.
+  vector<string> helpSections;
+  helpSections.push_back("Input");
+  helpSections.push_back("Windows");
+  helpSections.push_back("Statistics");
+  helpSections.push_back("Sample size and missing data");
+  helpSections.push_back("Output");
+  helpSections.push_back("Other");
+  params.setSectionOrder(helpSections);
+  params.setEpilogue(EPILOGUE);
+
+  //Bare invocation used to reach parseCommandLine and print four validation
+  //errors -- no window mode, winsize 0, winstep 0, no data file -- which is
+  //an unhelpful first contact with the tool. Print the usage instead.
+  //
+  //--help is handled here rather than in param_t because param_t signals it
+  //with the same `throw 0` it uses for a bad flag, so main could not tell
+  //them apart and `divstats --help` exited 1. Asking for help is not an
+  //error and now exits 0; a bare invocation is a usage error and exits 1.
+  bool wantHelp = false;
+  for (int i = 1; i < argc; i++) {
+    if (string(argv[i]) == ARG_HELP) wantHelp = true;
+  }
+  if (wantHelp || argc == 1) {
+    params.printHelp();
+    return wantHelp ? 0 : 1;
+  }
+
   try {
     params.parseCommandLine(argc, argv);
   }
@@ -491,6 +521,14 @@ int main(int argc, char *argv[])
   double **results = new double*[windows->size()];
   for (unsigned int i = 0; i < windows->size(); i++) results[i] = resultsBlock + (size_t)i * numStats;
 
+  progress_t progress;
+  pthread_mutex_init(&progress.lock, NULL);
+  progress.done = 0;
+  progress.total = (long)windows->size();
+  progress.lastTenth = 0;
+  progress.start = time(NULL);
+  progress.announced = false;
+
   work_order_t *order;
   pthread_t *peer = new pthread_t[numThreads];
   int prev_index = 0;
@@ -506,7 +544,7 @@ int main(int argc, char *argv[])
     order->mapData = mapData;
     order->freqData = freqData;
     //order->flog = &flog;
-    //order->bar = &pbar;
+    order->progress = &progress;
     order->params = &params;
     order->results = results;
     order->windows = windows;
@@ -523,6 +561,9 @@ int main(int argc, char *argv[])
   {
     pthread_join(peer[i], NULL);
   }
+
+  if (progress.announced) cerr << "  done.\n";
+  pthread_mutex_destroy(&progress.lock);
 
   delete [] peer;
   //nhapsUsed/nSitesUsed are freed after the write loop below

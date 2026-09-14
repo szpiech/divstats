@@ -412,6 +412,13 @@ define_case sweepfinder       sweep -- --vcf "$M" --sites --winsize 100 --winste
 # multi-chromosome file was merged into one coordinate space and labelled with
 # the last chromosome seen, and the unsorted file produced windows containing
 # a subset of the sites with -999 statistics in the first one.
+# The command-line surface. A bare invocation used to print four validation
+# errors instead of the usage, and --help exited 1 because param_t signalled
+# it with the same throw it uses for a bad flag.
+define_case usage-bare        usage "USAGE:"            1 --
+define_case usage-help        usage "EXAMPLES"          0 -- --help
+define_case usage-version     usage "^[0-9]+\\.[0-9]+\\.[0-9]+$" 0 -- --version
+define_case usage-sections    usage "Sample size and missing data" 0 -- --help
 define_case reject-multichr   reject "more than one chromosome" 0 -- --vcf "$SCRATCH/multichr.vcf.gz" --bp --winsize 5000 --winstep 5000 --pi
 define_case reject-unsorted   reject "not sorted by position"   0 -- --vcf "$SCRATCH/unsorted.vcf.gz" --bp --winsize 5000 --winstep 5000 --pi
 define_case threads-4         table -- --vcf "$C" --sites --winsize 100 --winstep 100 --pi --s --d --h --threads 4
@@ -433,11 +440,36 @@ run_one() {
       # shellcheck disable=SC2086
       $BIN $args --out "$out" > "$out.stdout" 2>"$out.err"; rc=$?
       ;;
+    usage)
+      # No --out: these cases are about what the tool says when asked for
+      # help, given nothing, or asked its version -- adding an output flag
+      # would defeat the bare-invocation case entirely.
+      # shellcheck disable=SC2086
+      $BIN $args > "$out.stdout" 2>"$out.err"; rc=$?
+      ;;
     *)
       # shellcheck disable=SC2086
       $BIN $args --out "$out" > /dev/null 2>"$out.err"; rc=$?
       ;;
   esac
+
+  # A usage case pins the command-line surface: an EXACT exit status plus a
+  # pattern that must appear on stdout or stderr. Exit status is the half
+  # that matters and the half that was wrong -- asking for help is not an
+  # error and must exit 0, while a bare invocation is one and must not.
+  if [ "$kind" = "usage" ]; then
+    if [ "$rc" -ne "$maxfrac" ]; then
+      printf "  FAIL  %-18s exit %d, expected %d\n" "$name" "$rc" "$maxfrac"
+      sed 's/^/    /' "$out.err" | head -3
+      FAIL=$((FAIL+1)); FAILED_CASES+=("$name"); return
+    fi
+    if ! cat "$out.stdout" "$out.err" 2>/dev/null | grep -qE "$tolcol"; then
+      printf "  FAIL  %-18s exit %d as expected, but output does not match /%s/\n" "$name" "$rc" "$tolcol"
+      FAIL=$((FAIL+1)); FAILED_CASES+=("$name"); return
+    fi
+    printf "  ok    %-18s exit %d, output matches /%s/\n" "$name" "$rc" "$tolcol"
+    PASS=$((PASS+1)); return
+  fi
 
   # A reject case asserts that bad input is REFUSED, which is the whole point
   # of the multi-chromosome and sort-order checks -- there is no output table

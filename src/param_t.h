@@ -64,6 +64,13 @@ public:
     vector<char> getCharListFlag(string flag);
 
     void setPreamble(string str);
+    //Help sections. The label passed to addFlag doubles as a section
+    //heading; setSectionOrder fixes the order they print in. Flags whose
+    //label is not listed are printed last under a trailing heading, so
+    //adding a flag and forgetting to section it cannot hide it. Leaving the
+    //order unset reproduces the old flat alphabetical listing.
+    void setSectionOrder(vector<string> sections);
+    void setEpilogue(string str);
 
     param_t();
 
@@ -92,6 +99,8 @@ private:
     bool flagExists(string flag);
 
     string preamble;
+    string epilogue;
+    vector<string> sectionOrder;
 };
 
 #endif
