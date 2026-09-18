@@ -432,7 +432,14 @@ is in the statistics. Output is byte-identical.
   `MSYS*` and `CYGWIN*`, selecting `lib/mingw64`; zlib and winpthreads come
   from the toolchain, and libgcc/libstdc++ are linked statically so the
   executable runs outside the MSYS2 shell. A CI job builds it and runs the
-  full regression suite there.
+  full regression suite there, and the release workflow ships a
+  `windows-x86_64` asset as a `.zip`.
+
+  The release build links `-static`, so the `.exe` carries no MSYS2 runtime
+  dependency, and the workflow refuses to publish one that does: it reads the
+  import table with `objdump` rather than running the binary, because inside
+  MSYS2 a dynamically linked exe runs perfectly and fails only on the
+  downloader's machine.
 
 - **Output is LF on every platform.** The output table, the SweepFinder2
   export and the `.divstats.log` sidecar are written to streams opened in

@@ -4,7 +4,7 @@
 # runs everything except the publish step, so the whole path can be exercised
 # before a tag exists.
 #
-# Three things this refuses to ship:
+# Four things this refuses to ship:
 #
 #   - a binary whose --version disagrees with the tag. VERSION lives in
 #     src/divstats-cli.h and nothing links the two but a human, which is
@@ -12,10 +12,14 @@
 #   - a binary that fails the regression suite.
 #   - a Linux binary that is dynamically linked when a static one was
 #     available (see the build step).
+#   - a Windows .exe that imports a DLL shipped by MSYS2 rather than by
+#     Windows. That one runs fine on the runner, inside MSYS2, and fails to
+#     start for everybody who downloads it, so it is checked by reading the
+#     import table rather than by running the binary.
 #
 # htslib is rebuilt from source on every leg rather than taken from
-# lib/<platform>/: a release binary should not depend on which archives
-# happen to be committed, and two of the four platforms here have none.
+# lib/<platform>/: a release binary should not depend on which archives happen
+# to be committed, and four of the five platforms here have none.
 
 name: release
 
@@ -40,17 +44,60 @@ jobs:
           - os: ubuntu-latest
             platform: linux
             asset: linux-x86_64
+            shell: bash
+            archive: tar.gz
           - os: ubuntu-24.04-arm
             platform: linux-arm
             asset: linux-arm64
+            shell: bash
+            archive: tar.gz
           - os: macos-latest
             platform: macos-arm
             asset: macos-arm64
+            shell: bash
+            archive: tar.gz
           - os: macos-15-intel
             platform: osx
             asset: macos-x86_64
+            shell: bash
+            archive: tar.gz
+          # Windows builds in the MSYS2 MINGW64 environment, which is a
+          # different shell from the runner's own, hence matrix.shell. A .zip
+          # rather than a .tar.gz: Windows 11 can open both, but a zip is what
+          # someone downloading a Windows asset expects.
+          - os: windows-latest
+            platform: mingw64
+            asset: windows-x86_64
+            shell: msys2 {0}
+            archive: zip
+    # matrix is available to defaults.run, so the shell is chosen once per leg
+    # rather than annotated onto every step.
+    defaults:
+      run:
+        shell: ${{ matrix.shell }}
     steps:
       - uses: actions/checkout@v4
+
+      # Before any `run:` step, since those use the shell it installs. zip is
+      # for packaging; the rest are what build_htslib.sh and the suite need.
+      # objdump comes with mingw-w64-x86_64-gcc and is used by the DLL check.
+      - uses: msys2/setup-msys2@v2
+        if: runner.os == 'Windows'
+        with:
+          msystem: MINGW64
+          update: false
+          install: >-
+            make
+            gawk
+            gzip
+            tar
+            bzip2
+            curl
+            zip
+            diffutils
+            coreutils
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-zlib
 
       - name: zlib headers
         if: runner.os == 'Linux'
@@ -77,17 +124,57 @@ jobs:
               make -C src clean
               make -C src -j4
             fi
+          elif [ "$RUNNER_OS" = Windows ]; then
+            # The default Windows link is not good enough for a release asset.
+            # WINFLAGS is -static-libgcc -static-libstdc++, which leaves the
+            # exe needing zlib1.dll and libwinpthread-1.dll -- present inside
+            # MSYS2 and absent on the machine of anyone who downloads this. A
+            # full -static pulls libz, winpthread, libgcc and libstdc++ in,
+            # and the step below proves it did.
+            make -C src -j4 WINFLAGS="-static"
           else
             make -C src -j4
           fi
           make -C src info
+          # The Makefile knows the binary's name -- divstats or divstats.exe --
+          # and prints it, so later steps ask rather than guess.
+          echo "BIN=src/$(make -C src info | awk '/^binary/ {print $3}')" >> "$GITHUB_ENV"
+
+      # The Linux leg proves its static link by running the binary. That does
+      # not work here: inside MSYS2 the DLLs are on PATH, so a dynamically
+      # linked exe runs perfectly and fails only on the user's machine. Read
+      # the import table instead, and refuse anything that is not a Windows
+      # system DLL.
+      - name: Windows exe imports only system DLLs
+        if: runner.os == 'Windows'
+        run: |
+          set -euo pipefail
+          command -v objdump >/dev/null || { echo "objdump missing; cannot verify imports" >&2; exit 1; }
+          imports="$(objdump -p "$BIN" | awk '/DLL Name:/ {print tolower($3)}' | sort -u)"
+          # An empty import table is not a pass. Every PE executable imports
+          # at least one system DLL, so nothing here means objdump did not
+          # read a PE file -- and a check that accepts an empty result is a
+          # check that certifies whatever it failed to look at.
+          if [ -z "$imports" ]; then
+            echo "no DLL imports found in $BIN; objdump did not read it as a PE image" >&2
+            exit 1
+          fi
+          echo "$imports" | sed 's/^/  imports /'
+          bad="$(echo "$imports" | grep -E '^(libgcc|libstdc|libwinpthread|zlib1|libz|msys-)' || true)"
+          if [ -n "$bad" ]; then
+            echo "$BIN depends on DLLs that ship with MSYS2, not with Windows:" >&2
+            echo "$bad" | sed 's/^/  /' >&2
+            echo "It would fail to start on a machine without MSYS2 installed." >&2
+            exit 1
+          fi
+          echo "no MSYS2 runtime dependencies"
 
       - name: Binary version matches the tag
         if: startsWith(github.ref, 'refs/tags/')
         run: |
           set -euo pipefail
           tag="${GITHUB_REF_NAME#v}"
-          ver="$(./src/divstats --version)"
+          ver="$("./$BIN" --version)"
           if [ "$tag" != "$ver" ]; then
             echo "tag $GITHUB_REF_NAME carries version '$tag' but the binary reports '$ver'." >&2
             echo "Update VERSION in src/divstats-cli.h, or retag." >&2
@@ -98,18 +185,29 @@ jobs:
       - name: Regression suite
         run: ./tests/run_tests.sh
 
-      # shasum, not sha256sum: the latter is not on macOS.
+      # The checksum tool is whichever exists: sha256sum is absent on macOS,
+      # shasum is a perl script and absent from a minimal MSYS2. Both print
+      # the same "<hash>  <file>" format.
       - name: Package
         run: |
           set -euo pipefail
-          ver="$(./src/divstats --version)"
+          ver="$("./$BIN" --version)"
           name="divstats-${ver}-${{ matrix.asset }}"
           mkdir -p "dist/$name"
-          cp src/divstats "dist/$name/"
+          cp "$BIN" "dist/$name/"
           cp README.md CHANGELOG.md LICENSE.md "dist/$name/"
-          tar -C dist -czf "dist/$name.tar.gz" "$name"
+          case "${{ matrix.archive }}" in
+            zip)    ( cd dist && zip -qr "$name.zip" "$name" ) ;;
+            tar.gz) tar -C dist -czf "dist/$name.tar.gz" "$name" ;;
+            *)      echo "unknown archive format ${{ matrix.archive }}" >&2; exit 1 ;;
+          esac
           rm -rf "dist/$name"
-          ( cd dist && shasum -a 256 "$name.tar.gz" > "$name.tar.gz.sha256" )
+          f="$name.${{ matrix.archive }}"
+          if command -v sha256sum >/dev/null 2>&1; then
+            ( cd dist && sha256sum "$f" > "$f.sha256" )
+          else
+            ( cd dist && shasum -a 256 "$f" > "$f.sha256" )
+          fi
           ls -l dist
 
       - uses: actions/upload-artifact@v4
@@ -147,6 +245,6 @@ jobs:
           set -euo pipefail
           ls -l dist
           gh release create "$GITHUB_REF_NAME" \
-            dist/*.tar.gz dist/*.sha256 \
+            dist/*.tar.gz dist/*.zip dist/*.sha256 \
             --draft --generate-notes \
             --title "divstats $GITHUB_REF_NAME"
