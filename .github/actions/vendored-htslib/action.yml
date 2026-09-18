@@ -20,13 +20,33 @@ runs:
       run: |
         set -euo pipefail
 
-        # `make info` is the authority on which archive this platform wants and
-        # whether it is there. It is .PHONY with no prerequisites, so it still
-        # answers when the archive is missing -- which is the case that matters.
-        plat="$(basename "$(make -C src info | awk '/^L_PATH/ {print $3}')")"
-        echo "platform: $plat"
+        # One invocation, captured and echoed. When this step failed on the
+        # Windows runner the log held nothing from make at all, because both
+        # invocations were piped into something -- so there was no way to see
+        # what it had actually said.
+        # 2>&1 and the explicit failure path: a command substitution swallows
+        # output, so if `make info` itself fails the log would again say
+        # nothing about why. Show it either way.
+        if ! info="$(make -C src info 2>&1)"; then
+          echo "$info"
+          echo "make -C src info failed; nothing below can be trusted" >&2
+          exit 1
+        fi
+        echo "$info"
 
-        if make -C src info | grep -q 'libhts.a : MISSING'; then
+        plat="$(basename "$(awk '/^L_PATH/ {print $3}' <<< "$info")")"
+        archive="lib/$plat/libhts.a"
+
+        # A FILE TEST, not a grep for make's "MISSING" wording. The condition
+        # for building is whether the archive exists; tying that to the exact
+        # text of a diagnostic, through a pipeline, under pipefail, is how this
+        # step skipped the build on the Windows runner and then failed on the
+        # very file it had just declined to build. `make info` remains the
+        # authority on WHICH archive this platform wants -- that is a value it
+        # prints, not a sentence.
+        if [ -f "$archive" ]; then
+          echo "using the committed $archive"
+        else
           echo "no committed archive for $plat; building one from source"
           if [ "$RUNNER_OS" = Linux ]; then
             sudo apt-get update && sudo apt-get install -y zlib1g-dev
@@ -38,4 +58,4 @@ runs:
         # can exist and still be unlinkable, which is how the non-PIC lib/linux
         # archive got in. build_htslib.sh runs the same script on what it
         # produces.
-        ./lib/check_htslib.sh "lib/$plat/libhts.a"
+        ./lib/check_htslib.sh "$archive"

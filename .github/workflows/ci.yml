@@ -179,11 +179,27 @@ jobs:
       - name: Vendored htslib
         run: |
           set -euo pipefail
-          plat="$(basename "$(make -C src info | awk '/^L_PATH/ {print $3}')")"
-          if make -C src info | grep -q 'libhts.a : MISSING'; then
+          # Same logic as ./.github/actions/vendored-htslib, which this job
+          # cannot use (see above). Captured and echoed rather than piped, and
+          # conditioned on the archive FILE rather than on make's "MISSING"
+          # wording: the pipeline-and-grep form returned false on this runner
+          # with the archive absent, skipped the build, and then failed on the
+          # missing file -- with no make output in the log to say why.
+          if ! info="$(make -C src info 2>&1)"; then
+            echo "$info"
+            echo "make -C src info failed; nothing below can be trusted" >&2
+            exit 1
+          fi
+          echo "$info"
+          plat="$(basename "$(awk '/^L_PATH/ {print $3}' <<< "$info")")"
+          archive="lib/$plat/libhts.a"
+          if [ -f "$archive" ]; then
+            echo "using the committed $archive"
+          else
+            echo "no committed archive for $plat; building one from source"
             ./lib/build_htslib.sh "$plat"
           fi
-          ./lib/check_htslib.sh "lib/$plat/libhts.a"
+          ./lib/check_htslib.sh "$archive"
 
       - name: Build
         run: make -C src -j4
