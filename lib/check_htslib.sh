@@ -40,8 +40,16 @@ echo "checking $A ($(wc -c < "$A" | tr -d ' ') bytes)"
 rc=0
 
 # --- 1. external dependencies -------------------------------------------
+# nm's exit status and output are both checked. `nm -u ... | grep -q` reports
+# no match when nm cannot read the archive at all, which is indistinguishable
+# from a clean archive -- so on a platform whose nm does not understand the
+# object format this would print "ok" and assert something it had not looked
+# at. libhts.a always has undefined symbols (zlib, libc), so empty output
+# means nm failed, not that the archive is self-contained.
 printf '  external dependencies: '
-if nm -u "$A" 2>/dev/null | grep -qE '_?(BZ2_|lzma_|curl_|libdeflate_)'; then
+if ! undef="$(nm -u "$A" 2>/dev/null)" || [ -z "$undef" ]; then
+  echo "skipped -- nm on this host cannot read the archive"
+elif grep -qE '_?(BZ2_|lzma_|curl_|libdeflate_)' <<< "$undef"; then
   echo "FAIL"
   echo "    references bz2/lzma/curl/libdeflate symbols; divstats links only"
   echo "    -lz and will fail at link time. Rebuild with build_htslib.sh,"
@@ -60,6 +68,10 @@ for c in readelf llvm-readelf eu-readelf; do
   if command -v "$c" >/dev/null 2>&1; then READELF="$c"; break; fi
 done
 
+# Not applicable on Windows: PE/COFF code is position-independent by
+# construction, there is no PIE link to reject an absolute relocation, and
+# readelf finds no ELF relocation sections in a COFF archive -- so a mingw64
+# archive reports "skipped" here, correctly.
 printf '  position-independent: '
 if [ -z "$READELF" ]; then
   echo "skipped -- no readelf on PATH"

@@ -5,6 +5,7 @@ test.*
 sample.*
 .DS_Store
 divstats
+divstats.exe
 *.divstats.out
 # vendored GSL, no longer used (B3 removed the only gsl_combination call)
 lib/*/libgsl.a

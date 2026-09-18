@@ -40,6 +40,11 @@ else
     # one archive per ABI. Must precede the catch-all Linux case.
     Linux-aarch64|Linux-arm64) PLATFORM=linux-arm ;;
     Linux-*)       PLATFORM=linux ;;
+    # MSYS2: uname -s is MINGW64_NT-10.0-<build> in a MINGW64 shell and
+    # MSYS_NT-10.0-<build> in the MSYS shell. Both build with the mingw-w64
+    # toolchain, so both produce the same archive; src/Makefile matches the
+    # same three prefixes.
+    MINGW*|MSYS*|CYGWIN*) PLATFORM=mingw64 ;;
     *) echo "error: cannot guess platform from $(uname -s)-$(uname -m); pass it explicitly" >&2
        exit 2 ;;
   esac
@@ -71,7 +76,16 @@ cd "htslib-${VERSION}"
 # lib-static gets whatever CFLAGS say. Setting CFLAGS replaces configure's
 # default (-g -Wall -O2); -g is dropped deliberately, since a vendored release
 # archive does not need debug info and it roughly doubles the size.
-./configure CFLAGS="-O2 -fPIC" \
+# -fPIC is meaningless on Windows -- PE code is position-independent by
+# construction, and mingw-w64's gcc answers it with "-fPIC ignored for target
+# (all code is position independent)" on every single file. Nothing breaks, but
+# a few hundred lines of warning is how a real one gets missed.
+case "$PLATFORM" in
+  mingw64) HTS_CFLAGS="-O2" ;;
+  *)       HTS_CFLAGS="-O2 -fPIC" ;;
+esac
+
+./configure CFLAGS="$HTS_CFLAGS" \
             --disable-libcurl --disable-bz2 --disable-lzma \
             --without-libdeflate --disable-plugins --disable-gcs --disable-s3
 make -j"$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)" lib-static

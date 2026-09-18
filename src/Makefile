@@ -48,37 +48,73 @@ endif
 I_PATH   ?= -I../include
 LINK_OPTS2 ?= -lz -pthread
 
-# Where the vendored static libhts.a for this platform lives.
-ifeq ($(UNAME_S),Darwin)
-  ifeq ($(UNAME_M),arm64)
-    L_PATH ?= ../lib/macos-arm
-  else
-    L_PATH ?= ../lib/osx
-  endif
+# Windows, built with the MinGW-w64 toolchain under MSYS2. uname -s reports
+# MINGW64_NT-10.0-<build> from a MINGW64 shell, MSYS_NT-10.0-<build> from the
+# MSYS shell, and CYGWIN_NT-* under Cygwin, so match on the prefix rather than
+# enumerating build numbers. This is a real check now: it used to be the
+# catch-all else, so every unrecognised platform -- FreeBSD, Solaris, a
+# cross-compile -- was silently handed Windows library paths.
+WINDOWS := $(filter MINGW% MSYS% CYGWIN%,$(UNAME_S))
+
+# Link-time executable suffix, empty everywhere but Windows so the target
+# below stays plain `divstats` on Unix. Not cosmetic: MinGW's g++ appends .exe
+# whatever you pass to -o, so without this the file named by the target is
+# never created, make considers the goal permanently out of date, and every
+# invocation relinks.
+ifneq ($(WINDOWS),)
+  EXE := .exe
 else
-  ifeq ($(UNAME_S),Linux)
-    # lib/linux holds the x86_64 archive; arm64 needs its own, exactly as
-    # Darwin does. An archive built for one architecture cannot link against
-    # objects compiled for the other, and the failure is a wall of undefined
-    # symbols rather than anything that names the cause.
-    #
-    # uname -m reports aarch64 on most arm64 distributions and arm64 on a
-    # few, so match both.
-    ifeq ($(filter aarch64 arm64,$(UNAME_M)),)
-      L_PATH ?= ../lib/linux
+  EXE :=
+endif
+
+# Where the vendored static libhts.a for this platform lives.
+ifneq ($(WINDOWS),)
+  WINFLAGS ?= -static-libgcc -static-libstdc++
+  L_PATH ?= ../lib/mingw64
+  # MSYS2's mingw-w64 toolchain supplies zlib and winpthreads, so the two
+  # 32-bit archives lib/win32 used to carry are neither needed nor usable from
+  # a 64-bit build.
+  LINK_OPTS2 ?= -lz -pthread
+  # Static libgcc/libstdc++ so the .exe runs outside the MSYS2 shell, where
+  # those DLLs are not on PATH. -DPTW32_STATIC_LIB went with pthreads-win32;
+  # winpthreads needs no such define.
+  #
+  # Its own variable, not OPT: `OPT ?= -O3` is set above this block, so an
+  # `OPT ?=` here can never fire -- which is why the old win32 branch's
+  # -static-libgcc and -DPTW32_STATIC_LIB were dead the whole time. It also
+  # keeps the flags when a caller overrides OPT, as the sanitizer and warning
+  # CI jobs do.
+else
+  ifeq ($(UNAME_S),Darwin)
+    ifeq ($(UNAME_M),arm64)
+      L_PATH ?= ../lib/macos-arm
     else
-      L_PATH ?= ../lib/linux-arm
+      L_PATH ?= ../lib/osx
     endif
   else
-    # MinGW reports MINGW64_NT-10.0 and friends
-    L_PATH ?= ../lib/win32
-    I_PATH ?= -I../include -I../include/win32
-    LINK_OPTS2 ?= ../lib/win32/libpthreadGC2.a ../lib/win32/libz.a
-    OPT ?= -DPTW32_STATIC_LIB -O3 -static-libgcc -static-libstdc++
+    ifeq ($(UNAME_S),Linux)
+      # lib/linux holds the x86_64 archive; arm64 needs its own, exactly as
+      # Darwin does. An archive built for one architecture cannot link against
+      # objects compiled for the other, and the failure is a wall of undefined
+      # symbols rather than anything that names the cause.
+      #
+      # uname -m reports aarch64 on most arm64 distributions and arm64 on a
+      # few, so match both.
+      ifeq ($(filter aarch64 arm64,$(UNAME_M)),)
+        L_PATH ?= ../lib/linux
+      else
+        L_PATH ?= ../lib/linux-arm
+      endif
+    else
+      # Deliberately a path that cannot exist. `make info` still answers, and
+      # the missing-archive rule then names the platform and says to pass
+      # L_PATH -- which beats compiling against another platform's headers.
+      L_PATH ?= ../lib/unknown-$(UNAME_S)-$(UNAME_M)
+    endif
   endif
 endif
 
-CXXFLAGS ?= $(OPT) $(STD) $(ARCHFLAGS)
+CXXFLAGS ?= $(OPT) $(STD) $(ARCHFLAGS) $(WINFLAGS)
 
 PREFIX  ?= /usr/local
 INSTALL ?= install
@@ -103,7 +139,7 @@ HEADERS = divstats-cli.h divstats-data.h divstats-hts.h divstats-winstats.h divs
 OBJS = divstats-main.o divstats-data.o divstats-hts.o binom.o param_t.o \
        gzstream.o divstats-winstats.o divstats-wintools.o
 
-all : divstats
+all : divstats$(EXE)
 
 #A missing vendored archive used to surface as a wall of undefined symbols
 #from the linker. Say what is missing and how to produce it instead.
@@ -112,10 +148,12 @@ $(L_PATH)/libhts.a :
 	@echo "       divstats vendors a static htslib per platform. Build one with:"
 	@echo "           ../lib/build_htslib.sh"
 	@echo "       Detected platform: $(UNAME_S) $(UNAME_M)"
+	@echo "       If divstats does not know that platform, pass the path"
+	@echo "       explicitly: make L_PATH=../lib/<dir>"
 	@exit 1
 
-divstats : $(OBJS) $(L_PATH)/libhts.a
-	$(CXX) $(CXXFLAGS) -o divstats $(OBJS) $(LINK_OPTS2) $(LINK_OPTS)
+divstats$(EXE) : $(OBJS) $(L_PATH)/libhts.a
+	$(CXX) $(CXXFLAGS) -o divstats$(EXE) $(OBJS) $(LINK_OPTS2) $(LINK_OPTS)
 
 divstats-main.o : divstats-main.cpp $(HEADERS)
 	$(CXX) $(CXXFLAGS) -c divstats-main.cpp $(I_PATH)
@@ -143,15 +181,15 @@ gzstream.o : gzstream.cpp $(HEADERS)
 
 #Golden-file regression suite. Compares this build's output against the
 #tables in tests/expected/ column by column. See tests/run_tests.sh.
-check : divstats
+check : divstats$(EXE)
 	../tests/run_tests.sh
 
 clean :
-	rm -f $(OBJS) divstats
+	rm -f $(OBJS) divstats divstats.exe
 
-install : divstats
+install : divstats$(EXE)
 	$(INSTALL) -d $(DESTDIR)$(PREFIX)/bin
-	$(INSTALL) -m 755 divstats $(DESTDIR)$(PREFIX)/bin/divstats
+	$(INSTALL) -m 755 divstats$(EXE) $(DESTDIR)$(PREFIX)/bin/divstats$(EXE)
 
 #Printed on request, and worth pasting into a bug report.
 info :
@@ -159,6 +197,7 @@ info :
 	@echo "CXX      : $(CXX)"
 	@echo "CXXFLAGS : $(CXXFLAGS)"
 	@echo "L_PATH   : $(L_PATH)"
+	@echo "binary   : divstats$(EXE)"
 	@echo "libhts.a : $(if $(wildcard $(L_PATH)/libhts.a),present,MISSING -- run ../lib/build_htslib.sh)"
 
 .PHONY : all check clean install info
