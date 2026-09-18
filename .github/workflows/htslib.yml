@@ -1,0 +1,99 @@
+# Rebuild the vendored static htslib from source, then build and test
+# divstats against the archive this run produced rather than the committed one.
+#
+# Two things this checks that CI cannot:
+#
+#   1. lib/build_htslib.sh still works. It downloads the htslib RELEASE
+#      tarball (the git tag archive has no generated ./configure) and
+#      configures away bzip2, lzma, libcurl and libdeflate so the archive
+#      needs nothing beyond the -lz divstats already links. The script fails
+#      itself if any of those symbols survive.
+#   2. divstats builds and passes the suite against a freshly built archive.
+#      A committed .a is tied to the toolchain and C library it was built
+#      against, so "links here" and "links on a current runner" are different
+#      claims.
+#
+# The archives are uploaded as workflow artifacts, which is how to obtain one
+# for a platform you do not have to hand -- in particular lib/osx, which the
+# repo does not carry: macos-15-intel is the last x86_64 macOS image GitHub
+# offers (available until August 2027; macos-13 was retired in December 2025).
+# Download the artifact and commit it so nobody on that platform repeats the
+# build. lib/linux-arm is in the same position: src/Makefile now selects it on
+# arm64 Linux, but no archive is committed for that platform yet.
+
+name: vendored htslib
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: htslib version to build
+        default: "1.21"
+        required: false
+  # The script and this workflow are the only inputs to the result.
+  push:
+    paths:
+      - lib/build_htslib.sh
+      - .github/workflows/htslib.yml
+  # Monthly, so a toolchain or runner-image change that breaks the build is
+  # found before someone needs a new platform. Scheduled runs only fire on the
+  # default branch.
+  schedule:
+    - cron: "0 5 1 * *"
+
+permissions:
+  contents: read
+
+jobs:
+  rebuild:
+    name: ${{ matrix.platform }} (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+          - os: ubuntu-24.04-arm
+            platform: linux-arm
+          - os: macos-latest
+            platform: macos-arm
+          - os: macos-15-intel
+            platform: osx
+    steps:
+      - uses: actions/checkout@v4
+
+      # Present on the current image, but the failure mode without it is a
+      # configure-time message about zlib rather than anything obvious.
+      - name: zlib headers
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y zlib1g-dev
+
+      - name: Build htslib ${{ inputs.version || '1.21' }}
+        run: ./lib/build_htslib.sh ${{ matrix.platform }} ${{ inputs.version || '1.21' }}
+
+      # Sizes, not a byte comparison: ar records timestamps and uids, so two
+      # archives built from the same source are not expected to be identical.
+      - name: Compare against the committed archive
+        run: |
+          set -uo pipefail
+          a="lib/${{ matrix.platform }}/libhts.a"
+          echo "rebuilt: $(wc -c < "$a") bytes"
+          git diff --stat -- lib include || true
+
+      - name: Build divstats against it
+        run: |
+          make -C src info
+          make -C src -j4
+
+      - name: Regression suite
+        run: ./tests/run_tests.sh
+
+      - name: Upload the archive and headers
+        uses: actions/upload-artifact@v4
+        with:
+          name: libhts-${{ matrix.platform }}
+          path: |
+            lib/${{ matrix.platform }}/libhts.a
+            include/htslib
+          if-no-files-found: error

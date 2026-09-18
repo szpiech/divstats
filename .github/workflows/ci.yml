@@ -1,0 +1,186 @@
+# Build divstats and run the golden-file regression suite on every push.
+#
+# The suite is the point of this workflow. It compares this build's output
+# against tests/expected/ column by column, so a job failing here names the
+# statistic that moved -- see tests/run_tests.sh. The other jobs guard
+# defects this repo has already shipped once:
+#
+#   sanitizers   -- 2.0.0 fixed a heap over-read in pi_k2 and an
+#                   unconditional release of uninitialised pointers in
+#                   calc_stats. Both are invisible to a golden-file
+#                   comparison when the indeterminate values happen to be
+#                   benign, which is why 1.0.0's distributed binary ran and a
+#                   clean rebuild of the same source segfaulted.
+#   header-deps  -- the Makefile declared no header dependencies until 2.0.0,
+#                   so editing a header left stale objects linked against the
+#                   old declarations (segsites() int -> double printed
+#                   S = 5.66e+07). This job proves the edges are still there.
+#   warnings     -- a ceiling, not a clean build. Lower MAX_WARNINGS as the
+#                   count comes down; it can then never rise silently.
+#
+# All jobs link the vendored static libhts.a committed under lib/<platform>/.
+# Rebuilding that archive from source is a separate workflow (htslib.yml)
+# because it needs the network and a few minutes.
+
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+# A second push to the same branch makes the first run's verdict irrelevant.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    name: build + suite (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # One platform's failure must not hide the other's result: a numeric
+      # difference that shows up only on x86_64 is the interesting case.
+      fail-fast: false
+      matrix:
+        # ubuntu-latest and macos-latest have a committed libhts.a;
+        # ubuntu-24.04-arm does not yet, and the step below builds it one.
+        # arm64 Linux runners are free for public repositories.
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      # Worth pasting into a bug report, and it says plainly when the platform
+      # has no vendored archive.
+      - name: Toolchain and vendored archive
+        run: make -C src info
+
+      # Builds the archive from source (~2 min) on a platform that has none,
+      # so a new runner architecture can be tested before anyone commits a
+      # 4.5 MB binary for it. Once lib/linux-arm/libhts.a is committed -- the
+      # vendored htslib workflow uploads one -- this becomes a no-op
+      # everywhere and the job is back to a ten-second build.
+      #
+      # basename(L_PATH) is the platform name build_htslib.sh expects: the
+      # Makefile and the script share that vocabulary, and `make info` is
+      # already the authority on which archive this platform wants.
+      - name: Bootstrap the vendored archive if this platform has none
+        run: |
+          set -euo pipefail
+          if make -C src info | grep -q 'libhts.a : MISSING'; then
+            plat="$(basename "$(make -C src info | awk '/^L_PATH/ {print $3}')")"
+            echo "no committed archive for $plat; building one from source"
+            if [ "$RUNNER_OS" = Linux ]; then
+              sudo apt-get update && sudo apt-get install -y zlib1g-dev
+            fi
+            ./lib/build_htslib.sh "$plat"
+          fi
+
+      - name: Build
+        run: make -C src -j4
+
+      - name: Regression suite
+        run: ./tests/run_tests.sh
+
+      # On failure the useful artefact is the scratch directory: the actual
+      # .divstats.out tables beside the goldens they disagree with. The
+      # comparator names the column; the tables show the pattern.
+      - name: Keep the failing outputs
+        if: failure()
+        run: |
+          set +e
+          out="$(./tests/run_tests.sh --keep)"
+          printf '%s\n' "$out"
+          dir="$(printf '%s\n' "$out" | sed -n 's/^scratch kept: //p')"
+          mkdir -p failure-outputs
+          [ -n "$dir" ] && cp -R "$dir" failure-outputs/scratch
+          cp -R tests/expected failure-outputs/expected
+          exit 0
+      - name: Upload the failing outputs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: suite-outputs-${{ matrix.os }}
+          path: failure-outputs
+          if-no-files-found: warn
+
+  sanitizers:
+    name: ASan + UBSan (ubuntu)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # OPT feeds CXXFLAGS, which the Makefile uses for both compiling and
+      # linking, so -fsanitize reaches the link line without a second variable.
+      - name: Build instrumented
+        run: make -C src -j4 CXX=clang++ OPT="-O1 -g -fno-omit-frame-pointer -fsanitize=address,undefined"
+
+      # abort_on_error / halt_on_error turn a sanitizer report into a nonzero
+      # exit, which the suite then reports as a failing case instead of
+      # swallowing it.
+      #
+      # detect_leaks=0: LeakSanitizer does not run on macOS, so leaving it on
+      # would make this job's verdict depend on the runner OS. Leaks in a
+      # short-lived CLI are a separate concern from memory errors; to audit
+      # them, set detect_leaks=1 here and expect htslib to show up.
+      - name: Regression suite under sanitizers
+        env:
+          ASAN_OPTIONS: detect_leaks=0:abort_on_error=1
+          UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+        run: ./tests/run_tests.sh
+
+  header-deps:
+    name: incremental rebuild picks up header edits
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build, touch a header, rebuild
+        run: |
+          set -euo pipefail
+          make -C src -j4
+          before="$(stat -c %Y src/divstats-data.o)"
+          # make compares timestamps, so the touch has to land strictly after
+          # the object was written.
+          sleep 1
+          touch src/divstats-data.h
+          make -C src
+          after="$(stat -c %Y src/divstats-data.o)"
+          if [ "$before" = "$after" ]; then
+            echo "divstats-data.o was NOT rebuilt after its header changed;" >&2
+            echo "the HEADERS dependency in src/Makefile has regressed." >&2
+            exit 1
+          fi
+          echo "rebuilt as expected"
+      - name: Suite still passes after the incremental rebuild
+        run: ./tests/run_tests.sh
+
+  warnings:
+    name: -Wall -Wextra ceiling
+    runs-on: ubuntu-latest
+    env:
+      # Measured on the 2.0.0 tree with clang: 16 -Wsign-compare,
+      # 8 -Wunused-variable, 1 -Wunused-but-set-variable, and one real find --
+      # -Wsometimes-uninitialized on hapData in divstats-main.cpp, where
+      # neither the TPED nor the VCF branch is taken. The headroom absorbs
+      # compiler-version drift; lower the ceiling as the count drops.
+      MAX_WARNINGS: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Count warnings
+        run: |
+          set -euo pipefail
+          # clang, not the Makefile's default g++: the ceiling was measured
+          # with clang, and the two compilers do not warn alike.
+          make -C src -j4 CXX=clang++ OPT="-O2 -Wall -Wextra" 2>&1 | tee build.log
+          n="$(grep -c 'warning:' build.log || true)"
+          echo "::notice::$n warnings (ceiling $MAX_WARNINGS)"
+          # || true: grep exits 1 on no match, and pipefail would then fail
+          # the step for the good case of a clean build.
+          { grep 'warning:' build.log || true; } | sed -E 's/.*\[(-W[a-z-]+)\]/\1/' | sort | uniq -c | sort -rn
+          if [ "$n" -gt "$MAX_WARNINGS" ]; then
+            echo "warning count $n exceeds the ceiling $MAX_WARNINGS" >&2
+            exit 1
+          fi
