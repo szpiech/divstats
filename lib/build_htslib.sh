@@ -3,7 +3,8 @@
 #
 #   ./lib/build_htslib.sh [platform] [version]
 #
-# platform defaults to a guess from uname (macos-arm, osx, linux); version
+# platform defaults to a guess from uname -- see the case block below for the
+# names it can produce, which is the one place they are listed. version
 # defaults to the value below. Writes lib/<platform>/libhts.a and refreshes
 # include/htslib/*.h.
 #
@@ -35,6 +36,9 @@ else
   case "$(uname -s)-$(uname -m)" in
     Darwin-arm64)  PLATFORM=macos-arm ;;
     Darwin-x86_64) PLATFORM=osx ;;
+    # Architecture matters on Linux for the same reason it does on Darwin:
+    # one archive per ABI. Must precede the catch-all Linux case.
+    Linux-aarch64|Linux-arm64) PLATFORM=linux-arm ;;
     Linux-*)       PLATFORM=linux ;;
     *) echo "error: cannot guess platform from $(uname -s)-$(uname -m); pass it explicitly" >&2
        exit 2 ;;

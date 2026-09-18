@@ -57,7 +57,18 @@ ifeq ($(UNAME_S),Darwin)
   endif
 else
   ifeq ($(UNAME_S),Linux)
-    L_PATH ?= ../lib/linux
+    # lib/linux holds the x86_64 archive; arm64 needs its own, exactly as
+    # Darwin does. An archive built for one architecture cannot link against
+    # objects compiled for the other, and the failure is a wall of undefined
+    # symbols rather than anything that names the cause.
+    #
+    # uname -m reports aarch64 on most arm64 distributions and arm64 on a
+    # few, so match both.
+    ifeq ($(filter aarch64 arm64,$(UNAME_M)),)
+      L_PATH ?= ../lib/linux
+    else
+      L_PATH ?= ../lib/linux-arm
+    endif
   else
     # MinGW reports MINGW64_NT-10.0 and friends
     L_PATH ?= ../lib/win32
