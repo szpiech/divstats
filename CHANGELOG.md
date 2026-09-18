@@ -425,6 +425,35 @@ windows 0.769 → 0.244 s, `--pik 2 3 4 5` 2.784 → 0.655 s, `--pik 2` over 500
 windows 0.447 → 0.241 s. A parse-only control is unchanged, confirming the gain
 is in the statistics. Output is byte-identical.
 
+### Added -- Windows support (MSYS2 / MinGW64)
+
+- **divstats builds as a native Windows binary** with the MinGW-w64 toolchain
+  under MSYS2, producing `divstats.exe`. `uname -s` is matched on `MINGW*`,
+  `MSYS*` and `CYGWIN*`, selecting `lib/mingw64`; zlib and winpthreads come
+  from the toolchain, and libgcc/libstdc++ are linked statically so the
+  executable runs outside the MSYS2 shell. A CI job builds it and runs the
+  full regression suite there.
+
+- **Output is LF on every platform.** The output table, the SweepFinder2
+  export and the `.divstats.log` sidecar are written to streams opened in
+  binary mode. In text mode Windows would translate every newline to CRLF, so
+  the same input would give byte-different output than on Linux or macOS. No
+  change on POSIX. Input files may use either convention.
+
+- **`.gitattributes` pins the working tree to LF.** Without it a Windows
+  checkout can convert the shell scripts to CRLF, and bash then fails on the
+  test harness itself. The vendored archives, VCF/BCF fixtures and gzipped
+  goldens are declared binary.
+
+- Fixed along the way: the Windows settings in `src/Makefile` were the
+  catch-all `else`, so any unrecognised platform was silently given Windows
+  library paths; such a platform now gets a path that names it and a message
+  saying to pass `L_PATH`. The old branch's `-static-libgcc` and
+  `-DPTW32_STATIC_LIB` were dead code, since `OPT ?=` had already been
+  resolved above it. And `check_htslib.sh`'s dependency check reported "ok"
+  when `nm` could not read the archive at all -- a false pass that a new
+  object format was liable to hit -- and now reports "skipped".
+
 ### Known issues carried forward
 
 

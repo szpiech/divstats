@@ -1,0 +1,19 @@
+# Line endings are not a local preference in this repository.
+#
+# bash runs tests/run_tests.sh and the two lib/*.sh scripts. A CRLF checkout
+# makes bash fail on the harness itself -- "$'\r': command not found" -- and
+# whether that happens would otherwise depend on the core.autocrlf setting of
+# whichever Windows machine or CI image checked the tree out. The regression
+# goldens are compared as LF text for the same reason. Declaring it here makes
+# the working tree identical on every platform regardless of that setting.
+* text=auto eol=lf
+
+# Byte-for-byte, never normalised: the vendored static archives, the VCF/BCF
+# fixtures, and the gzipped goldens. Git's own detection would almost
+# certainly classify all of these as binary on its own, but "almost certainly"
+# is not the standard for a file whose entire purpose is to be compared
+# byte-for-byte against a program's output.
+*.a       binary
+*.gz      binary
+*.bcf     binary
+*.bundle  binary

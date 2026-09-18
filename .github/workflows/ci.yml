@@ -17,6 +17,9 @@
 #                   S = 5.66e+07). This job proves the edges are still there.
 #   warnings     -- a ceiling, not a clean build. Lower MAX_WARNINGS as the
 #                   count comes down; it can then never rise silently.
+#   windows      -- MSYS2/MinGW64. Guards more than compilation: the goldens
+#                   are LF, so a pass is also proof that output is not being
+#                   written CRLF by a stream left in text mode.
 #
 # Every job that compiles goes through ./.github/actions/vendored-htslib
 # first, which makes lib/<platform>/libhts.a present -- building it from source
@@ -126,6 +129,83 @@ jobs:
           ASAN_OPTIONS: detect_leaks=0:abort_on_error=1
           UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
         run: ./tests/run_tests.sh
+
+  # Windows, built with the MinGW-w64 toolchain under MSYS2. Kept out of the
+  # build-test matrix because it needs a different shell and a toolchain
+  # install first, which a matrix leg cannot express.
+  #
+  # This is the one compiling job that does NOT use
+  # ./.github/actions/vendored-htslib, and not by oversight: a composite
+  # action's run steps name their own shell, and the runner's `bash` on
+  # windows-latest is Git Bash -- a different installation from the MSYS2
+  # environment set up below, without the mingw-w64 toolchain on PATH. The
+  # five lines are therefore repeated here against the same two scripts, which
+  # remain the source of truth.
+  windows:
+    name: MSYS2 MinGW64
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          # Pinned image contents rather than a full pacman -Syu: faster, and a
+          # break is then attributable to a change here rather than to whatever
+          # upstream moved that morning.
+          update: false
+          # curl, tar and bzip2 are for build_htslib.sh, which fetches and
+          # unpacks the htslib release tarball. diffutils supplies cmp and
+          # coreutils md5sum/mktemp, both of which the suite uses. gawk is
+          # explicit because the comparator is awk.
+          install: >-
+            make
+            gawk
+            gzip
+            tar
+            bzip2
+            curl
+            diffutils
+            coreutils
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-zlib
+
+      - name: Toolchain and vendored archive
+        run: make -C src info
+
+      - name: Vendored htslib
+        run: |
+          set -euo pipefail
+          plat="$(basename "$(make -C src info | awk '/^L_PATH/ {print $3}')")"
+          if make -C src info | grep -q 'libhts.a : MISSING'; then
+            ./lib/build_htslib.sh "$plat"
+          fi
+          ./lib/check_htslib.sh "lib/$plat/libhts.a"
+
+      - name: Build
+        run: make -C src -j4
+
+      # Two things beyond "does it compile": the suite's goldens are LF, so a
+      # pass here is also the check that output is not being written CRLF; and
+      # the binary is divstats.exe, which run_tests.sh has to resolve.
+      - name: Regression suite
+        run: ./tests/run_tests.sh
+
+      - name: Keep the failing outputs
+        if: failure()
+        run: |
+          mkdir -p failure-outputs
+          cp -r "${TMPDIR:-/tmp}"/divstats-tests.* failure-outputs/ 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: suite-outputs-windows
+          path: failure-outputs
+          if-no-files-found: warn
 
   header-deps:
     name: incremental rebuild picks up header edits

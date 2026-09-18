@@ -28,6 +28,35 @@ Any variable can be overridden on the command line:
     make CXX=clang++ OPT="-O2 -g"
     make install PREFIX=$HOME/.local
 
+### Windows (MSYS2 / MinGW64)
+
+divstats builds as a native Windows binary with the MinGW-w64 toolchain under
+[MSYS2](https://www.msys2.org/). From a **MINGW64** shell:
+
+    pacman -S --needed make gawk gzip tar bzip2 curl diffutils coreutils \
+                       mingw-w64-x86_64-gcc mingw-w64-x86_64-zlib
+    cd src && make
+
+`uname -s` reports `MINGW64_NT-…` there, which selects `lib/mingw64` and
+produces **`divstats.exe`**. zlib and threads come from the toolchain, and
+libgcc/libstdc++ are linked statically so the executable runs from `cmd.exe`
+or PowerShell with MSYS2's `bin` off `PATH`.
+
+No archive is committed for this platform yet, so the first build will stop
+and ask for one:
+
+    ./lib/build_htslib.sh        # detects mingw64; needs curl and tar
+
+Two things worth knowing:
+
+- **Output is always LF**, on Windows as elsewhere. A stream in text mode
+  would write CRLF and the same input would then produce byte-different
+  results on different platforms, which is not a property a tool should have
+  when its output *is* the result. Input files may use either convention.
+- `.gitattributes` pins the working tree to LF. Without it a Windows checkout
+  can convert the shell scripts to CRLF, and bash then fails on the test
+  harness itself with `$'\r': command not found`.
+
 ### htslib
 
 htslib is vendored as a prebuilt static archive, one per platform, at
