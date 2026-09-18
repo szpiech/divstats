@@ -1,11 +1,18 @@
-# Branch `divstats-fixes`
+# Review record — the work behind 2.0.0
 
-Fixes from a code review of `devel` @ `061b966` plus the uncommitted
-working-tree changes that sat on top of it. Ordered so that nothing which
-changes a reported number lands before there is a suite to measure the
-change against.
+A code review of `devel` @ `061b966`, plus the uncommitted working-tree
+changes that sat on top of it, and the fixes that came out of it. Kept as a
+working log on the `divstats-fixes` branch while the work was in progress;
+that branch has since been fast-forwarded into `devel` and `master` and
+deleted, so every commit cited below is reachable from either of them.
 
-Run `make check` in `src/` after any change on this branch.
+The ordering was deliberate: nothing that changes a reported number landed
+before there was a regression suite to measure the change against. That is
+why the table's third column exists, and it is the part worth keeping — the
+CHANGELOG says what changed, this says which statistics moved and which
+equivalence check backs each speedup.
+
+Run `make check` in `src/` after any change.
 
 ## Commits
 
