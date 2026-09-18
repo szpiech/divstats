@@ -577,6 +577,11 @@ run_one() {
 # ---------------------------------------------------------------------- main
 if [ "$LIST" = 1 ]; then printf '%s\n' "${CASE_NAMES[@]}"; exit 0; fi
 
+# A MinGW build is divstats.exe -- mingw-w64's g++ appends the suffix whatever
+# -o says, and src/Makefile names its target to match. Fall back only when the
+# plain name is absent, so a Unix build and an explicit --bin are unaffected.
+if [ ! -x "$BIN" ] && [ -x "$BIN.exe" ]; then BIN="$BIN.exe"; fi
+
 if [ ! -x "$BIN" ]; then echo "no binary at $BIN (run make first)" >&2; exit 2; fi
 if [ ! -f "$CORE" ]; then echo "missing fixture $CORE" >&2; exit 2; fi
 

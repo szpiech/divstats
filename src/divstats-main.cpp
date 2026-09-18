@@ -329,8 +329,18 @@ int main(int argc, char *argv[])
   }
 
   string outfile = outfileBase + ".divstats.out";
+  //ios::binary, on a text file, deliberately. On Windows a stream opened in
+  //text mode translates every '\n' into CRLF, so the same input would give
+  //byte-different output there than on Linux or macOS -- and every golden in
+  //tests/expected, which is LF, would fail. For a tool whose output IS the
+  //result, one set of bytes per input matters more than the local newline
+  //convention. No effect on POSIX, where the two modes are the same thing.
+  //
+  //Input streams are left in text mode: that converts CRLF to LF for free on
+  //Windows, and the parsers tolerate a stray '\r' anyway, since >> treats it
+  //as whitespace and the getline results only feed field counting.
   ofstream fout;
-  fout.open(outfile.c_str());
+  fout.open(outfile.c_str(), ios::out | ios::binary);
   if (fout.fail()) {
     cerr << "ERROR: Failed to open " << outfile << " for writing.\n";
     return 1;
@@ -469,7 +479,7 @@ int main(int argc, char *argv[])
     //uses for nothing else in this mode. It now goes to <out>.sweepfinder.out
     //alongside the other output.
     string sfFilename = outfileBase + ".sweepfinder.out";
-    ofstream sfout(sfFilename.c_str());
+    ofstream sfout(sfFilename.c_str(), ios::out | ios::binary);   //LF on every platform, as above
     if (sfout.fail()) {
       cerr << "ERROR: Failed to open " << sfFilename << " for writing.\n";
       return 1;
@@ -629,7 +639,7 @@ int main(int argc, char *argv[])
   //the table, so that a bare read_csv(sep='\t') keeps working.
   string logfile = outfileBase + ".divstats.log";
   ofstream flog;
-  flog.open(logfile.c_str());
+  flog.open(logfile.c_str(), ios::out | ios::binary);   //LF on every platform, as above
   if (flog.fail()) {
     cerr << "WARNING: could not write " << logfile << "; continuing.\n";
   }
