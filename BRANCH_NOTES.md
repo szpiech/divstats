@@ -53,6 +53,9 @@ Run `make check` in `src/` after any change on this branch.
 | `48034cc` | MSYS2/MinGW64 as a platform: explicit uname match, `$(EXE)`, mingw64 archive | no |
 | `081a647` | LF output on every platform (binary-mode streams); suite finds `divstats.exe` | Windows only |
 | `d09e414` | MSYS2 CI job; `.gitattributes` pins the tree to LF | no |
+| `9f96421` | `windows-x86_64` release asset, built `-static` and import-checked | no |
+| `1833c2d` | htslib bootstrap decides on the archive file, not make's wording | no |
+| `81b581f` | `-lsystre -ltre -lws2_32` on Windows; `libhts.a` before `-lz` | no (byte-identical) |
 
 For the count and anything added after the rows above, ask git rather than
 trusting this table:
@@ -302,3 +305,13 @@ both noted in the commits: the Windows leg of the Makefile was the catch-all
 `OPT ?=` could never fire, because `OPT ?= -O3` is resolved above the platform
 block -- so `-static-libgcc` and `-DPTW32_STATIC_LIB` had been dead since they
 were written.
+
+**The `?=` order trap in src/Makefile, twice.** A default assigned above the
+platform block silently disables every branch's attempt to override it, since
+with `?=` the first assignment wins. It is why the old win32 branch's
+`-static-libgcc` and `-DPTW32_STATIC_LIB` were dead code, and why the first
+version of the mingw64 `-lsystre -ltre -lws2_32` line produced a link command
+with none of them. `I_PATH` and `LINK_OPTS2` are now defaulted *below* the
+block. Check a platform change by asking make what it would run --
+`make -n divstats UNAME_S=… UNAME_M=…` from a clean tree -- not by reading the
+variable assignment.
