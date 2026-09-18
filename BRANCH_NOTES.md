@@ -50,6 +50,9 @@ Run `make check` in `src/` after any change on this branch.
 | `036ae89` | **P12** `--bp` windows start at the data, not coordinate 0 | yes: empty leading rows gone |
 | `a3d5560` | **P11** alleles stored two bits per site | no (byte-identical) |
 | `37b67d9` | **P6 P7** hoisted spectrum lookups, const-ref strings and maps | no (byte-identical) |
+| `48034cc` | MSYS2/MinGW64 as a platform: explicit uname match, `$(EXE)`, mingw64 archive | no |
+| `081a647` | LF output on every platform (binary-mode streams); suite finds `divstats.exe` | Windows only |
+| `d09e414` | MSYS2 CI job; `.gitattributes` pins the tree to LF | no |
 
 For the count and anything added after the rows above, ask git rather than
 trusting this table:
@@ -281,3 +284,21 @@ to be confirmed by AddressSanitizer reporting no leak. It was not: LSan does
 not run on macOS arm64, and a control program with a deliberate leak produced
 no report either. The fix rests on inspection and on matching the other three
 release functions. Re-check on Linux with `detect_leaks=1`.
+
+**Windows is unproven until CI runs it.** There is no Windows machine in the
+environment the port was written in, so every claim about the mingw64 leg is
+either platform-independent or verified by simulating `uname`: all eight
+`L_PATH` branches by overriding `UNAME_S`/`UNAME_M` on the make command line,
+the build script's guesser through a fake `uname`, `check_htslib.sh` against a
+non-ELF archive and an unreadable one, and the `.exe` fallback by pointing
+`--bin` at a suffixed copy. What has never executed is a MinGW compile, a
+native-Windows run, or the CRLF behaviour the binary-mode streams exist to
+prevent. The `windows` job in CI is the test; read it before trusting the
+platform.
+
+Two things were found while writing it that were defects in their own right,
+both noted in the commits: the Windows leg of the Makefile was the catch-all
+`else`, so every unrecognised platform got Windows library paths; and its
+`OPT ?=` could never fire, because `OPT ?= -O3` is resolved above the platform
+block -- so `-static-libgcc` and `-DPTW32_STATIC_LIB` had been dead since they
+were written.
