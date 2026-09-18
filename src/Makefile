@@ -35,10 +35,12 @@ OPT      ?= -O3
 STD      ?= -std=c++11
 
 # -m64 -mmmx -msse -msse2 are x86 codegen flags. They do not break an ARM
-# build -- clang accepts and ignores them -- but they emit
+# build -- clang accepts and ignores them -- but three of the four emit
 # "argument unused during compilation" on every translation unit, which is
-# noise that trains the reader to skim warnings. Apply them only where they
-# mean something.
+# noise that trains the reader to skim warnings. (-m64 is silent: clang takes
+# it as a target-width request it can satisfy. -mmmx, -msse and -msse2 are the
+# ones that warn, measured on arm64 clang, one flag at a time.) Apply them
+# only where they mean something.
 ifeq ($(filter x86_64 amd64,$(UNAME_M)),)
   ARCHFLAGS ?=
 else
