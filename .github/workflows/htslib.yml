@@ -72,6 +72,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y zlib1g-dev
 
       - name: Build htslib ${{ inputs.version || '1.21' }}
+        id: build
         run: ./lib/build_htslib.sh ${{ matrix.platform }} ${{ inputs.version || '1.21' }}
 
       # Sizes, not a byte comparison: ar records timestamps and uids, so two
@@ -91,7 +92,24 @@ jobs:
       - name: Regression suite
         run: ./tests/run_tests.sh
 
+      # Upload whenever the ARCHIVE built, even if a later step failed. The
+      # steps between build and here test divstats, not the archive: the run
+      # triggered by the -fPIC fix built four good archives and uploaded two,
+      # because the Linux legs failed the regression suite on an unrelated
+      # fixture defect and an unconditional upload step is skipped after any
+      # failure. The archive is the deliverable; losing it to a red suite is
+      # the wrong trade, and a red run is exactly when you want to inspect it.
+      #
+      # Gated on steps.build rather than always(): with no archive on disk,
+      # if-no-files-found: error would add a second, misleading failure. That
+      # assertion stays meaningful precisely because of this condition.
+      #
+      # Note when committing one of these from a failed run: build_htslib.sh
+      # has already run check_htslib.sh on it, so it is a linkable archive with
+      # no dependency beyond zlib. What a red run leaves unproven is that
+      # divstats passes ITS suite against it -- read the failing job first.
       - name: Upload the archive and headers
+        if: always() && steps.build.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: libhts-${{ matrix.platform }}
