@@ -1,4 +1,5 @@
-# Build divstats and run the golden-file regression suite on every push.
+# Build divstats and run the golden-file regression suite on every push to
+# master or devel, and on every pull request.
 #
 # The suite is the point of this workflow. It compares this build's output
 # against tests/expected/ column by column, so a job failing here names the
@@ -35,7 +36,21 @@
 name: CI
 
 on:
+  # Pushes only to the long-lived branches, pull requests from anywhere.
+  #
+  # Unfiltered, `push:` ran the whole matrix on every commit of every branch --
+  # five jobs, and the Windows leg installs a toolchain and builds htslib from
+  # source when no archive is committed for its platform. A feature branch is
+  # still checked, once, through its pull request, which is the point at which
+  # the verdict is needed. Work that never opens a PR can be checked on demand
+  # with workflow_dispatch.
+  #
+  # The cost is a PR from devel to master running twice, once for the push and
+  # once for the PR. A feature-branch PR does not: its pushes do not match.
   push:
+    branches:
+      - master
+      - devel
   pull_request:
   workflow_dispatch:
 
