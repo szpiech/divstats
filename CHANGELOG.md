@@ -452,6 +452,14 @@ is in the statistics. Output is byte-identical.
   test harness itself. The vendored archives, VCF/BCF fixtures and gzipped
   goldens are declared binary.
 
+- **Library link order corrected on every platform.** `libhts.a` now precedes
+  `-lz -pthread` on the link line. The old order worked on Unix only because
+  libz is a shared library there and stays in the linker's symbol table; a
+  fully static link, which the Windows release build uses, resolves an
+  archive member's undefined symbols only from libraries named *later* on the
+  command line and would have failed. No effect on the Unix builds — the
+  binary is byte-identical.
+
 - Fixed along the way: the Windows settings in `src/Makefile` were the
   catch-all `else`, so any unrecognised platform was silently given Windows
   library paths; such a platform now gets a path that names it and a message

@@ -34,13 +34,20 @@ divstats builds as a native Windows binary with the MinGW-w64 toolchain under
 [MSYS2](https://www.msys2.org/). From a **MINGW64** shell:
 
     pacman -S --needed make gawk gzip tar bzip2 curl diffutils coreutils \
-                       mingw-w64-x86_64-gcc mingw-w64-x86_64-zlib
+                       mingw-w64-x86_64-gcc mingw-w64-x86_64-zlib \
+                       mingw-w64-x86_64-libsystre mingw-w64-x86_64-libtre
     cd src && make
 
 `uname -s` reports `MINGW64_NT-…` there, which selects `lib/mingw64` and
 produces **`divstats.exe`**. zlib and threads come from the toolchain, and
 libgcc/libstdc++ are linked statically so the executable runs from `cmd.exe`
 or PowerShell with MSYS2's `bin` off `PATH`.
+
+libsystre is not optional. mingw-w64 ships no `regex.h`, and htslib's
+`hts_expr.c` includes it unconditionally — the first Windows build stopped
+there. divstats does reach those symbols (`hts_expr.o` is pulled into the
+link), so `-lsystre -ltre` is on the link line, along with `-lws2_32` for the
+`recv`/`send` htslib references even with libcurl disabled.
 
 No archive is committed for this platform yet, so the first build will stop
 and ask for one:

@@ -45,8 +45,12 @@ else
   ARCHFLAGS ?= -m64 -mmmx -msse -msse2
 endif
 
-I_PATH   ?= -I../include
-LINK_OPTS2 ?= -lz -pthread
+# I_PATH and LINK_OPTS2 are defaulted BELOW the platform block, not here.
+# With ?= the first assignment wins, so a default set above the block silently
+# disables every platform's attempt to override it. That has now bitten this
+# file twice: the old win32 branch's -static-libgcc and -DPTW32_STATIC_LIB
+# were dead for exactly this reason, and so was the first version of the
+# mingw64 -lsystre/-lws2_32 line. Specific first, defaults last.
 
 # Windows, built with the MinGW-w64 toolchain under MSYS2. uname -s reports
 # MINGW64_NT-10.0-<build> from a MINGW64 shell, MSYS_NT-10.0-<build> from the
@@ -74,7 +78,22 @@ ifneq ($(WINDOWS),)
   # MSYS2's mingw-w64 toolchain supplies zlib and winpthreads, so the two
   # 32-bit archives lib/win32 used to carry are neither needed nor usable from
   # a 64-bit build.
-  LINK_OPTS2 ?= -lz -pthread
+  #
+  # Two more than the Unix legs, both because of what libhts.a drags in:
+  #
+  #   -lsystre -ltre   POSIX regex. mingw-w64 has no regex.h at all, which is
+  #                    where the first Windows CI build stopped: htslib's
+  #                    hts_expr.c includes it unconditionally. libsystre also
+  #                    supplies regcomp/regexec/regfree, and divstats does
+  #                    reach them -- hts_expr.o is pulled into the link, so
+  #                    this is not optional. -ltre after it: libsystre is a
+  #                    thin wrapper over libtre, and a fully static link needs
+  #                    the backing library named too.
+  #   -lws2_32         Winsock, for the recv/send that htslib's hfile code
+  #                    references even with libcurl disabled. A Windows system
+  #                    library, so it costs no package and ws2_32.dll is one
+  #                    the release leg's import check accepts.
+  LINK_OPTS2 ?= -lz -pthread -lsystre -ltre -lws2_32
   # Static libgcc/libstdc++ so the .exe runs outside the MSYS2 shell, where
   # those DLLs are not on PATH. -DPTW32_STATIC_LIB went with pthreads-win32;
   # winpthreads needs no such define.
@@ -113,6 +132,10 @@ else
     endif
   endif
 endif
+
+# Defaults for anything no platform branch above set.
+I_PATH     ?= -I../include
+LINK_OPTS2 ?= -lz -pthread
 
 CXXFLAGS ?= $(OPT) $(STD) $(ARCHFLAGS) $(WINFLAGS)
 
@@ -153,7 +176,12 @@ $(L_PATH)/libhts.a :
 	@exit 1
 
 divstats$(EXE) : $(OBJS) $(L_PATH)/libhts.a
-	$(CXX) $(CXXFLAGS) -o divstats$(EXE) $(OBJS) $(LINK_OPTS2) $(LINK_OPTS)
+	#libhts.a BEFORE the libraries it needs, not after. ld resolves an
+	#archive member's undefined symbols only from libraries later on the
+	#command line, so -lz preceding libhts.a happens to work on Unix only
+	#because libz is shared there and stays in the symbol table. A fully
+	#static link -- which the Windows release build uses -- fails on it.
+	$(CXX) $(CXXFLAGS) -o divstats$(EXE) $(OBJS) $(LINK_OPTS) $(LINK_OPTS2)
 
 divstats-main.o : divstats-main.cpp $(HEADERS)
 	$(CXX) $(CXXFLAGS) -c divstats-main.cpp $(I_PATH)

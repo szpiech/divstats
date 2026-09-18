@@ -172,6 +172,8 @@ jobs:
             coreutils
             mingw-w64-x86_64-gcc
             mingw-w64-x86_64-zlib
+            mingw-w64-x86_64-libsystre
+            mingw-w64-x86_64-libtre
 
       - name: Toolchain and vendored archive
         run: make -C src info
