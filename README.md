@@ -44,12 +44,26 @@ rather than a page of undefined symbols:
     ./lib/build_htslib.sh linux 1.21   # or state it explicitly
 
 The script fetches the htslib **release tarball** (the GitHub tag archive
-lacks the generated `configure`), builds it without
+lacks the generated `configure`), builds it with `-fPIC` and without
 bzip2/lzma/libcurl/libdeflate — CRAM features divstats does not use, so
-nothing beyond zlib is needed — writes `lib/<platform>/libhts.a`, refreshes
-`include/htslib/`, and then verifies the archive references none of those
-back-ends, failing if it does. Commit the result so nobody on that platform
-has to repeat it.
+nothing beyond zlib is needed — writes `lib/<platform>/libhts.a` and refreshes
+`include/htslib/`. Commit the result so nobody on that platform has to repeat
+it.
+
+`-fPIC` matters even though the archive is static: current Linux toolchains
+link executables as PIE by default, and a PIE link rejects the absolute 32-bit
+relocations that non-PIC code emits, with an error naming htslib objects
+rather than the cause.
+
+Either script can check an existing archive:
+
+    ./lib/check_htslib.sh lib/linux/libhts.a
+
+which verifies both properties — nothing needed beyond zlib, and no absolute
+relocations outside debug sections. `build_htslib.sh` runs it on what it
+produces and CI runs it on what is committed, because those are different
+claims. It reads ELF on any host, so a Linux archive can be checked from
+macOS; `llvm-readelf` is enough where `readelf` is absent.
 
 A committed archive is tied to the toolchain and C library it was built
 against. If one is present for your platform but linking fails, rebuild it

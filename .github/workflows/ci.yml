@@ -60,7 +60,7 @@ jobs:
 
       # Builds the archive from source (~2 min) on a platform that has none,
       # so a new runner architecture can be tested before anyone commits a
-      # 4.5 MB binary for it. Once lib/linux-arm/libhts.a is committed -- the
+      # multi-megabyte binary for it. Once lib/linux-arm/libhts.a is committed -- the
       # vendored htslib workflow uploads one -- this becomes a no-op
       # everywhere and the job is back to a ten-second build.
       #
@@ -78,6 +78,17 @@ jobs:
             fi
             ./lib/build_htslib.sh "$plat"
           fi
+
+      # Check the archive that will actually be linked, before the linker sees
+      # it. A non-PIC archive otherwise surfaces as a page of R_X86_64_32
+      # relocation errors naming htslib objects, which says nothing about the
+      # cause; this names it. `make info` is the authority on which archive
+      # this platform wants, so the path is derived from it rather than guessed.
+      - name: Verify the vendored archive
+        run: |
+          set -euo pipefail
+          plat="$(basename "$(make -C src info | awk '/^L_PATH/ {print $3}')")"
+          ./lib/check_htslib.sh "lib/$plat/libhts.a"
 
       - name: Build
         run: make -C src -j4
@@ -112,6 +123,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      # This job needs the same archive handling as build-test. It did not have
+      # it, and that asymmetry mattered: ASan forces a PIE link on Linux, so
+      # this job was the first to reject the non-PIC lib/linux archive while
+      # looking like a sanitizer problem rather than a vendoring one.
+      - name: Bootstrap and verify the vendored archive
+        run: |
+          set -euo pipefail
+          if make -C src info | grep -q 'libhts.a : MISSING'; then
+            plat="$(basename "$(make -C src info | awk '/^L_PATH/ {print $3}')")"
+            sudo apt-get update && sudo apt-get install -y zlib1g-dev
+            ./lib/build_htslib.sh "$plat"
+          fi
+          plat="$(basename "$(make -C src info | awk '/^L_PATH/ {print $3}')")"
+          ./lib/check_htslib.sh "lib/$plat/libhts.a"
 
       # OPT feeds CXXFLAGS, which the Makefile uses for both compiling and
       # linking, so -fsanitize reaches the link line without a second variable.

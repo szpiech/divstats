@@ -120,6 +120,14 @@ moving by up to roughly 19% is the more representative headline.
 - **GSL is no longer required.** `gsl_combination` was its only use, in the
   tie enumeration the closed form replaces. 52 MB of vendored static libraries
   and 1.4 MB of headers are gone from the repository.
+- **The vendored htslib is built `-fPIC`**, and an archive that is not is
+  rejected. Current Linux toolchains link executables as PIE by default, and a
+  PIE link cannot use the absolute 32-bit relocations non-PIC code emits — so
+  a static archive built without `-fPIC` fails to link with an error naming
+  htslib objects rather than the cause. `lib/check_htslib.sh` verifies both
+  that and the zlib-only dependency; `build_htslib.sh` runs it on what it
+  builds and CI on what is committed. Dropping `-g` at the same time took the
+  macOS archive from 4.5 MB to 1.3 MB.
 - **htslib is vendored** in its place, configured without
   bzip2/lzma/libcurl/libdeflate so it needs nothing beyond the zlib divstats
   already linked. A prebuilt `lib/<platform>/libhts.a` is committed for each

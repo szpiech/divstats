@@ -6,8 +6,10 @@
 #   1. lib/build_htslib.sh still works. It downloads the htslib RELEASE
 #      tarball (the git tag archive has no generated ./configure) and
 #      configures away bzip2, lzma, libcurl and libdeflate so the archive
-#      needs nothing beyond the -lz divstats already links. The script fails
-#      itself if any of those symbols survive.
+#      needs nothing beyond the -lz divstats already links, and builds with
+#      -fPIC so the result can be linked into a PIE executable. It hands the
+#      archive to lib/check_htslib.sh, which fails the run if either property
+#      is missing.
 #   2. divstats builds and passes the suite against a freshly built archive.
 #      A committed .a is tied to the toolchain and C library it was built
 #      against, so "links here" and "links on a current runner" are different

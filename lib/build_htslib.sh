@@ -60,7 +60,19 @@ curl -fsSL -o hts.tar.bz2 "$URL"
 tar xjf hts.tar.bz2
 cd "htslib-${VERSION}"
 
-./configure --disable-libcurl --disable-bz2 --disable-lzma \
+# -fPIC is not optional, even though this is a STATIC archive. The default
+# toolchain on current Linux distributions links executables as PIE, and a PIE
+# link rejects the absolute 32-bit relocations that non-PIC code emits:
+#
+#   ld: libhts.a(hts.o): relocation R_X86_64_32 against `.rodata.str1.1'
+#       can not be used when making a PIE object; recompile with -fPIE
+#
+# htslib's own Makefile only builds PIC objects for the shared library, so
+# lib-static gets whatever CFLAGS say. Setting CFLAGS replaces configure's
+# default (-g -Wall -O2); -g is dropped deliberately, since a vendored release
+# archive does not need debug info and it roughly doubles the size.
+./configure CFLAGS="-O2 -fPIC" \
+            --disable-libcurl --disable-bz2 --disable-lzma \
             --without-libdeflate --disable-plugins --disable-gcs --disable-s3
 make -j"$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)" lib-static
 
@@ -69,10 +81,10 @@ cp -p libhts.a "$ROOT/lib/$PLATFORM/libhts.a"
 cp -p htslib/*.h "$ROOT/include/htslib/"
 
 echo "wrote lib/$PLATFORM/libhts.a ($(wc -c < libhts.a) bytes) and include/htslib/"
-echo "checking for unwanted external dependencies:"
-if nm -u libhts.a 2>/dev/null | grep -qE '_(BZ2|lzma|curl|libdeflate)'; then
-  echo "  WARNING: libhts.a references bz2/lzma/curl/libdeflate symbols;"
-  echo "           divstats links only -lz and will fail at link time."
-  exit 1
-fi
-echo "  none -- only zlib and libc are needed."
+
+# The same checks CI runs against the COMMITTED archive, run here against the
+# one just built. Keeping them in one script is deliberate: the first lib/linux
+# archive passed every check its builder ran and still could not be linked by
+# anyone else, so "verified where it was produced" and "verified where it is
+# consumed" have to be the same code.
+exec "$HERE/check_htslib.sh" "$ROOT/lib/$PLATFORM/libhts.a"
