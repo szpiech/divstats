@@ -1,0 +1,41 @@
+# Make lib/<platform>/libhts.a present and usable, then hand back to the job.
+#
+# Every job that compiles divstats needs this, and it was pasted into two of
+# them. The other four -- header-deps, warnings, the release build matrix, and
+# any job added later -- inherited nothing, so removing the non-PIC lib/linux
+# archive broke them one at a time as each was reached. That is what a composite
+# action is for: `uses: ./.github/actions/vendored-htslib` is one line, and a
+# new job cannot forget half of it.
+#
+# htslib.yml deliberately does NOT use this. Building the archive from source
+# and testing against it IS that workflow's subject, so it calls the script
+# directly.
+name: Vendored htslib
+description: Ensure the vendored static htslib for this platform exists and is linkable.
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        set -euo pipefail
+
+        # `make info` is the authority on which archive this platform wants and
+        # whether it is there. It is .PHONY with no prerequisites, so it still
+        # answers when the archive is missing -- which is the case that matters.
+        plat="$(basename "$(make -C src info | awk '/^L_PATH/ {print $3}')")"
+        echo "platform: $plat"
+
+        if make -C src info | grep -q 'libhts.a : MISSING'; then
+          echo "no committed archive for $plat; building one from source"
+          if [ "$RUNNER_OS" = Linux ]; then
+            sudo apt-get update && sudo apt-get install -y zlib1g-dev
+          fi
+          ./lib/build_htslib.sh "$plat"
+        fi
+
+        # Run on a committed archive as well as a freshly built one: an archive
+        # can exist and still be unlinkable, which is how the non-PIC lib/linux
+        # archive got in. build_htslib.sh runs the same script on what it
+        # produces.
+        ./lib/check_htslib.sh "lib/$plat/libhts.a"

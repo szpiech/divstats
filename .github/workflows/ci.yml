@@ -18,9 +18,16 @@
 #   warnings     -- a ceiling, not a clean build. Lower MAX_WARNINGS as the
 #                   count comes down; it can then never rise silently.
 #
-# All jobs link the vendored static libhts.a committed under lib/<platform>/.
-# Rebuilding that archive from source is a separate workflow (htslib.yml)
-# because it needs the network and a few minutes.
+# Every job that compiles goes through ./.github/actions/vendored-htslib
+# first, which makes lib/<platform>/libhts.a present -- building it from source
+# when the platform has none committed -- and checks that it is actually
+# linkable before the linker gets it. Add that one line to any new compiling
+# job; four of the jobs here once did the work inline or not at all, and each
+# one broke separately the day lib/linux/libhts.a was removed.
+#
+# Rebuilding the archive as a deliverable, and uploading it per platform, is a
+# separate workflow (htslib.yml) because it needs the network and a few
+# minutes.
 
 name: CI
 
@@ -58,37 +65,12 @@ jobs:
       - name: Toolchain and vendored archive
         run: make -C src info
 
-      # Builds the archive from source (~2 min) on a platform that has none,
-      # so a new runner architecture can be tested before anyone commits a
-      # multi-megabyte binary for it. Once lib/linux-arm/libhts.a is committed -- the
-      # vendored htslib workflow uploads one -- this becomes a no-op
-      # everywhere and the job is back to a ten-second build.
-      #
-      # basename(L_PATH) is the platform name build_htslib.sh expects: the
-      # Makefile and the script share that vocabulary, and `make info` is
-      # already the authority on which archive this platform wants.
-      - name: Bootstrap the vendored archive if this platform has none
-        run: |
-          set -euo pipefail
-          if make -C src info | grep -q 'libhts.a : MISSING'; then
-            plat="$(basename "$(make -C src info | awk '/^L_PATH/ {print $3}')")"
-            echo "no committed archive for $plat; building one from source"
-            if [ "$RUNNER_OS" = Linux ]; then
-              sudo apt-get update && sudo apt-get install -y zlib1g-dev
-            fi
-            ./lib/build_htslib.sh "$plat"
-          fi
-
-      # Check the archive that will actually be linked, before the linker sees
-      # it. A non-PIC archive otherwise surfaces as a page of R_X86_64_32
-      # relocation errors naming htslib objects, which says nothing about the
-      # cause; this names it. `make info` is the authority on which archive
-      # this platform wants, so the path is derived from it rather than guessed.
-      - name: Verify the vendored archive
-        run: |
-          set -euo pipefail
-          plat="$(basename "$(make -C src info | awk '/^L_PATH/ {print $3}')")"
-          ./lib/check_htslib.sh "lib/$plat/libhts.a"
+      # Builds the archive from source (~2 min) on a platform that has none, so
+      # a new runner architecture can be tested before anyone commits a
+      # multi-megabyte binary for it, and checks whatever archive will be
+      # linked -- committed or just built. Shared by every job here that
+      # compiles, because keeping it inline meant four jobs did not have it.
+      - uses: ./.github/actions/vendored-htslib
 
       - name: Build
         run: make -C src -j4
@@ -124,20 +106,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # This job needs the same archive handling as build-test. It did not have
-      # it, and that asymmetry mattered: ASan forces a PIE link on Linux, so
-      # this job was the first to reject the non-PIC lib/linux archive while
-      # looking like a sanitizer problem rather than a vendoring one.
-      - name: Bootstrap and verify the vendored archive
-        run: |
-          set -euo pipefail
-          if make -C src info | grep -q 'libhts.a : MISSING'; then
-            plat="$(basename "$(make -C src info | awk '/^L_PATH/ {print $3}')")"
-            sudo apt-get update && sudo apt-get install -y zlib1g-dev
-            ./lib/build_htslib.sh "$plat"
-          fi
-          plat="$(basename "$(make -C src info | awk '/^L_PATH/ {print $3}')")"
-          ./lib/check_htslib.sh "lib/$plat/libhts.a"
+      - uses: ./.github/actions/vendored-htslib
 
       # OPT feeds CXXFLAGS, which the Makefile uses for both compiling and
       # linking, so -fsanitize reaches the link line without a second variable.
@@ -163,6 +132,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/vendored-htslib
+
       - name: Build, touch a header, rebuild
         run: |
           set -euo pipefail
@@ -195,6 +166,8 @@ jobs:
       MAX_WARNINGS: 30
     steps:
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/vendored-htslib
+
       - name: Count warnings
         run: |
           set -euo pipefail
